@@ -1,0 +1,849 @@
+---
+title: "hello"
+author: "Cole Hunter"
+date: "4/1/2021"
+output: html_document
+---
+```{r load, include = FALSE}
+setwd("C:/Users/wmjhu/Downloads/")
+library(tidyverse)
+library(readr)
+library(readxl)
+```
+## LPI_data
+```{r LPI_data}
+LPI_data<-read.csv('dataset/LPR2020data_public.csv')%>%
+   mutate(Subspecies=ifelse(Subspecies=="NULL"|nchar(Subspecies)==0,NA,Subspecies))
+```
+
+
+## LPI_only_obs
+```{r LPI_only_obs}
+LPI_only_obs<-LPI_data%>%
+  pivot_longer(starts_with("X"),names_to="Year", values_to="Count")%>%
+  group_by(ID)%>%
+  filter(!Count=='NULL')%>%
+  mutate(Year=sub('.', '', Year))
+
+LPI_only_obs$ID<-as.factor(LPI_only_obs$ID)
+LPI_only_obs$Count<-as.numeric(LPI_only_obs$Count)
+LPI_only_obs$Year<-as.double(LPI_only_obs$Year)
+```
+
+## redlist_data
+```{r redlist_data}
+redlist_data<-read.csv('dataset/redlistspecies.csv')
+```
+
+## merged_data
+```{r merged_data}
+redlist_data$scientificName <- gsub(" ", "_", redlist_data$scientificName)
+
+#join livingplanet with redlist
+merged_data<-left_join(LPI_data,redlist_data, by=c('Binomial'='scientificName'))
+```
+
+```{r merged_timeseries}
+#pivot
+merged_timeseries<-merged_data%>%
+  pivot_longer(starts_with("X"),names_to="Year", values_to="Count")%>%
+  group_by(ID)%>%
+  filter(!Count=='NULL')%>%
+  mutate(Year=sub('.', '', Year))
+
+#set classes
+merged_timeseries$ID<-as.factor(merged_timeseries$ID)
+merged_timeseries$Year<-as.double(merged_timeseries$Year)
+merged_timeseries$Count<-as.numeric(merged_timeseries$Count)
+merged_timeseries$redlistCategory <- factor(merged_timeseries$redlistCategory, levels = c(NA, 'Data Deficient', 'Lower Risk/least concern', 'Least Concern', 'Lower Risk/conservation dependent', 'Lower Risk/near threatened', 'Near Threatened', 'Vulnerable', 'Endangered', 'Critically Endangered', 'Extinct in the Wild', 'Extinct'))
+merged_data$redlistCategory <- factor(merged_data$redlistCategory, levels = c(NA, 'Data Deficient', 'Lower Risk/least concern', 'Least Concern', 'Lower Risk/conservation dependent', 'Lower Risk/near threatened', 'Near Threatened', 'Vulnerable', 'Endangered', 'Critically Endangered', 'Extinct in the Wild', 'Extinct'))
+```
+
+## brRead
+
+### These functions help read nested brackets for expenditure data
+```{r brRead}
+# These functions help read nested brackets
+
+lastBrRead<-function(string){
+   #lastBrRead reads the last outermost bracket
+   #Example: "welcome (home) (my(lovely) gator)" %>% lastbrRead() returns "my(lovely) gator"
+   openBr=0
+   startpos=0
+   endpos=0
+   string_list<-unlist(strsplit(string, split = ""))
+   for(pos in 1:nchar(string)){
+      if(string_list[pos]=="("){
+         if (openBr==0){
+            startpos=pos
+         }
+         openBr<-openBr+1
+      } else if(string_list[pos]==")"){
+         if (openBr==1){
+            endpos=pos
+         }
+         openBr<-openBr-1
+      }
+   }
+   string<-substr(string,startpos+1,endpos-1)
+   return(string)
+}
+
+rmBrRead<-function(string){
+   if (nchar(string)==0) {return(string)}
+   #rnBrRead removes any inner brackets
+   #Example: "my(lovely) gator" %>% rmBrRead() returns "my gator"
+   string_list<-unlist(strsplit(string, split = ""))
+   openBr=0
+   cutstartpos=0
+   cutendpos=0
+   for(pos2 in 1:nchar(string)){
+      if(string_list[pos2]=="("){
+         if (openBr==0){
+            cutstartpos=pos2
+         }
+         openBr<-openBr+1
+      } else if(string_list[pos2]==")"){
+         if (openBr==1){
+            cutendpos=pos2
+         }
+         openBr<-openBr-1
+      }
+   }
+   string<-paste(substr(string, 1,cutstartpos-1), substr(string, cutendpos+1,nchar(string)), sep="")
+   return(string)
+}
+
+brRead<-function(string){
+   #"welcome (home) (my(lovely) gator)" %>% brRead() returns "my gator" 
+   return(rmBrRead(lastBrRead(string)))
+}
+```
+
+# expenditures_200X
+
+```{r expenditure2000}
+expen_2000<-read_excel('dataset/expen/expenditure_2000.xlsx',3)
+expenditures_2000<-expen_2000%>%
+   rename(Common_name="SPECIES NAME (50 CFR PART 17)", Scientific="SCIENTIFIC NAME", Class="RANK", FWS_total="FWS TOTAL", Other_fed="OTHER FED", Fed_total="FED TOTAL", States_total="STATES TOTAL", Species_total="SPECIES TOTAL ($000)")%>% #rename variables
+   filter(!is.na(Common_name))
+
+expenditures_2000<-expenditures_2000%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>%
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA))%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   mutate(Year=2000)%>%
+   mutate(FWS_total=FWS_total*1000, Other_fed=Other_fed*1000, Fed_total=Fed_total*1000, States_total=States_total*1000, Species_total=Species_total*1000)%>%
+   data.frame()
+```
+
+```{r expenditure2001}
+expen_2001<-read_excel('dataset/expen/expenditure_2001.xlsx',5)
+
+expenditures_2001<-expen_2001%>%
+   rename(Species_sci="Species (50 CFR Part 17)", Class="...1", FWS_total="FWS\r\nTotal ($)", Other_fed="Other Fed ($)", Fed_total="Fed Total ($)", States_total="States Total ($)", Species_total="Species Total ($)")%>% #rename variables
+   filter(!is.na(Species_sci))
+
+expenditures_2001<-expenditures_2001%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2001)%>%
+   data.frame()
+```
+
+```{r expenditure2002}
+expen_2002<-read_excel('dataset/expen/expenditure_2002.xlsx',5)
+
+expenditures_2002<-expen_2002%>%
+   rename(Species_sci="Species (50 CFR Part 17)", FWS_total="FWS\r\nTotal ($)", Other_fed="Other Fed ($)", Fed_total="Fed Total ($)", States_total="States Total ($)", Species_total="Species Total ($)")%>% #rename variables
+   filter(!is.na(Species_sci))
+
+expenditures_2002<-expenditures_2002%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2002)%>%
+   data.frame()
+```
+
+```{r expenditure2003}
+expen_2003<-read_excel('dataset/expen/expenditure_2003.xlsx',5)
+
+expenditures_2003<-expen_2003%>%
+   rename(Species_sci="Species (50 CFR Part 17)", Status="Stat- us", FWS_total="FWS\r\nTotal ($)", Other_fed="Other Fed ($)", Fed_total="Fed Total ($)", States_total="States Total ($)", Species_total="Species Total ($)")%>% #rename variables
+   filter(!is.na(Species_sci))
+
+expenditures_2003<-expenditures_2003%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2003)%>%
+   data.frame()
+```
+
+```{r expenditure2004}
+expen_2004<-read_excel('dataset/expen/expenditure_2004.xlsx',5)
+
+expenditures_2004<-expen_2004%>%
+   rename(Species_sci="Species (50 CFR Part 17)", FWS_total="FWS\r\nTotal", Other_fed="Other Fed", Fed_total="Fed Total", States_total="States Total", Species_total="Species Total")%>% #rename variables
+   filter(!is.na(Species_sci))
+
+expenditures_2004<-expenditures_2004%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2004)%>%
+   data.frame()
+```
+
+```{r expenditure2005}
+expen_2005<-read_excel('dataset/expen/expenditure_2005_06.xlsx',1)
+
+expenditures_2005<-expen_2005%>%
+   rename(Species_sci="Species (50 CFR Part 17)", Class="Rank", FWS_total="FWS\r\nTotal", Other_fed="Other Fed", Fed_total="Fed Total", States_total="States Total", Species_total="Species Total")%>% #rename variables
+   filter(!is.na(Species_sci))
+
+expenditures_2005<-expenditures_2005%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2005)%>%
+   data.frame()
+```
+
+```{r expenditure2006}
+expen_2006<-read_excel('dataset/expen/expenditure_2005_06.xlsx',2)
+
+expenditures_2006<-expen_2006%>%
+   rename(Species_sci="Species (50 CFR Part 17)", FWS_total="FWS\r\nTotal", Other_fed="Other Fed", Fed_total="Fed Total", States_total="States Total", Species_total="Species Total")%>% #rename variables
+   filter(!is.na(Species_sci))
+
+expenditures_2006<-expenditures_2006%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2006)%>%
+   data.frame()
+```
+
+```{r expenditure2007}
+expen_2007<-read_excel('dataset/expen/expenditure_2007.xlsx',1)
+
+expenditures_2007<-expen_2007%>%
+   rename(Species_sci="Species (50 CFR Part 17)", FWS_total="FWS\r\nTotal", Other_fed="Other Fed", Fed_total="Fed Total", States_total="States Total", Species_total="Species Total")%>% #rename variables
+   filter(!is.na(Species_sci))
+
+expenditures_2007<-expenditures_2007%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2007)%>%
+   data.frame()
+```
+
+
+```{r expenditure 2008}
+expen_2008<-read_excel('dataset/expen/expenditure_2008.xlsx',2)%>%
+   select(-starts_with("..."))
+
+expenditures_2008<-expen_2008%>%
+   rename(Species_sci="Species\r\n(50 CFR Part 17)",Class="Group\r\nName", FWS_total="FWS Total", Other_fed="Other Fed", Fed_total="Fed Total", States_total="States\r\nTotal", Species_total="Species\r\nTotal")
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2008<-expenditures_2008%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2008)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2008<-expenditures_2008%>%
+   filter(!Species=="17") #indicating rows with headers
+
+
+```
+
+```{r expenditure2009}
+expen_2009<-read_excel('dataset/expen/expenditure_2009.xlsx',1)%>%
+   select(-starts_with("..."))
+
+expenditures_2009<-expen_2009%>%
+   rename(Class = "Group",Species_sci="Species (50 CFR Part 17)", FWS_total="FWS Total", Other_fed="Other Fed", Fed_total="Fed Total", States_total="States Total", Species_total="Species Total")%>% #rename variables
+   filter(!is.na(Class))
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2009<-expenditures_2009%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2009)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2009<-expenditures_2009%>%
+   filter(!Species=="17") #indicating rows with headers
+```
+
+```{r expenditure 2010}
+expenditures_2010<-read_excel('dataset/expen/expenditure_2010.xlsx',3)%>%
+   select(-starts_with("...")) %>% rename(FWS_total="FWS_Total", Other_fed="Other_Fed", Fed_total="Fed_Total", States_total="States_Total", Species_total="Species_Total")
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2010<-expenditures_2010%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2010)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2010<-expenditures_2010%>%
+   filter(!Species=="17") #indicating rows with headers
+```
+
+```{r expenditure 2011, eval = FALSE}
+expen_2011<-read_excel('dataset/expen/expenditure_2011.xlsx',1)%>%
+   select(-starts_with("...")) %>% rename(FWS_Total="FWS_Total", Other_fed="Other_Fed", Fed_total="Fed_Total", States_total="States_Total", Species_total="Species_Total")
+
+expenditures_2011<-expen_2011%>%
+   filter(!is.na(Class))%>%
+   mutate(temp=cumsum(Class=='Fishes\r\nsubtotal'))%>%
+   filter(temp==0)%>% #select rows before "Fishes subtotal"
+   select(-temp)%>%
+   filter(!is.na(Species_sci))
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2011<-expenditures_2011%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2011)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2011<-expenditures_2011%>%
+   filter(!Species=="17") #indicating rows with headers
+
+
+```
+
+```{r expenditure 2012}
+expenditures_2012<-read_excel('dataset/expen/expenditure_2012.xlsx')%>%
+   select(-starts_with("...")) %>% rename(Other_fed="Other_Fed", Fed_total="Fed_Total", States_total="States_Total", Species_total="Species_Total")
+
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2012<-expenditures_2012%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2012)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2010<-expenditures_2010%>%
+   filter(!Species=="17") #indicating rows with headers
+```
+
+```{r expenditure 2013}
+expenditures_2013<-read_excel('dataset/expen/expenditure_2013.xlsx')%>%
+   select(-starts_with("...")) %>% rename(Other_fed="Other_Fed", Fed_total="Fed_Total", States_total="States_Total", Species_total="Species_Total")
+
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2013<-expenditures_2013%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2013)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2013<-expenditures_2013%>%
+   filter(!Species=="17") #indicating rows with headers
+
+```
+
+```{r expenditure 2014}
+
+expenditures_2014<-read_excel('dataset/expen/expenditure_2014.xlsx')%>%
+   select(-starts_with("...")) %>% rename(Other_fed="Other_Fed", Fed_total="Fed_Total", States_total="States_Total", Species_total="Species_Total")
+
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2014<-expenditures_2014%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2014)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2014<-expenditures_2014%>%
+   filter(!Species=="17") #indicating rows with headers
+```
+
+```{r expenditures 2015}
+expenditures_2015<-read_excel('dataset/expen/expenditure_2015.xlsx')%>%
+   select(-starts_with("..."))%>% rename(Other_fed="Other_Fed", Fed_total="Fed_Total", States_total="States_Total", Species_total="Species_Total")
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2015<-expenditures_2015%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2015)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2015<-expenditures_2015%>%
+   filter(!Species=="17") #indicating rows with headers
+
+
+
+```
+
+```{r expenditures 2016}
+expenditures_2016<-read_excel('dataset/expen/expenditure_2016.xlsx')%>%
+   select(-starts_with("..."))%>% rename(Other_fed="Other_Fed", Fed_total="Fed_Total", States_total="States_Total", Species_total="Species_Total")
+
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2016<-expenditures_2016%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2016)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2016<-expenditures_2016%>%
+   filter(!Species=="17") #indicating rows with headers
+
+
+```
+
+```{r expenditure2017}
+expenditures_2017<-read_excel('dataset/expen/expenditure_2017.xlsx')%>%
+   select(-starts_with("...")) %>% filter(!is.na(Species_sci))%>% rename(Other_fed="Other_Fed", Fed_total="Fed_Total", States_total="States_Total", Species_total="Species_Total")
+
+#Set Species/Subspecies/Location/Year (because bless them for putting 3 variables in one column)
+expenditures_2017<-expenditures_2017%>%
+   rowwise%>% #subset by row
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),brRead(Species_sci),Species_sci))%>% #if there is no parentheses at all
+   mutate(Scientific=ifelse(grepl("\\(",Species_sci),rmBrRead(Scientific),Scientific))%>% #if there is still parentheses after brRead
+   ungroup()%>%
+   mutate(Species=ifelse( #create Species variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3, #if Species is format: (Family Species Subspecies)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",2), #then return 2nd to last element (Species)
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),tail,1)))%>% #else return last element (Species)
+   mutate(Subspecies=ifelse( #create Subspecies variable
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),length)==3,
+      sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),"[",3),
+      NA)
+          )%>%
+   mutate(Genus=sapply(strsplit(Scientific, "\\s{2,}| |\\)|\\(|\r\n"),head,1))%>%
+   relocate(Species, .after = Scientific)%>%
+   mutate(Year=2017)%>%
+   data.frame()
+
+#Clean up data
+expenditures_2017<-expenditures_2017%>%
+   filter(!Species=="17") #indicating rows with headers
+
+```
+## expnditures_timeseries
+
+```{r expenditures_timeseries}
+#need 2011
+#Vertical join by columns (time series format)
+expenditures_timeseries<-rbind(
+   expenditures_2000%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2001%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2002%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2003%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2004%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2005%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2006%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2007%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2008%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2009%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2010%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   # expenditures_2011%>%
+   #    select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2012%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2013%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2014%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2015%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2016%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year),
+   expenditures_2017%>%
+      select(Class, Genus, Species, Subspecies, FWS_total, Other_fed, Fed_total, States_total, Species_total, Year)
+   )
+
+expenditures_timeseries <- expenditures_timeseries %>% filter(!is.na(Class)) %>% filter(Class != 758) %>% filter(Class != "total species expenditures")
+```
+
+## LPI_red_expen_ts
+```{r LPI_red_expen_ts}
+#Coerce uniformity along join keys by setting to lowercase
+merged_timeseries<-merged_timeseries %>%
+   mutate(Class = tolower(Class),
+          Species = tolower(Species),
+          Subspecies = tolower(Subspecies),
+          Genus = tolower(Genus))
+
+expenditures_timeseries<-expenditures_timeseries%>%
+   mutate(Class = tolower(Class),
+          Species = tolower(Species),
+          Subspecies = tolower(Subspecies),
+          Genus = tolower(Genus))
+
+#Set classes
+expenditures_timeseries$FWS_total<-as.numeric(expenditures_timeseries$FWS_total)
+expenditures_timeseries$Other_fed<-as.numeric(expenditures_timeseries$Other_fed)
+expenditures_timeseries$Fed_total<-as.numeric(expenditures_timeseries$Fed_total)
+expenditures_timeseries$States_total<-as.numeric(expenditures_timeseries$States_total)
+expenditures_timeseries$Species_total<-as.numeric(expenditures_timeseries$Species_total)
+expenditures_timeseries$Year<-as.double(expenditures_timeseries$Year)
+
+LPI_red_expen_ts<-merged_timeseries%>%left_join(.,expenditures_timeseries,by=c("Year","Genus", "Species", "Class"))
+```
+
+```{r asdf}
+#all the different ways counts are collected
+units <- unique(merged_timeseries[c("Units")])
+
+only_ind <- merged_timeseries %>% filter(str_detect(Units, "individuals|Individuals|individual|Individual"))
+
+only_counts <- merged_timeseries %>% filter(str_detect(Units, "individuals|Individuals|individual|Individual|pairs|Pairs|pair|Pair"))
+
+missing_ind <- (sum(is.na(only_ind))/(nrow(only_ind)*ncol(only_ind)))
+missing_ind
+
+# Dropping rows that do not have a count for the given year
+only_ind<-only_ind[complete.cases(only_ind[49]),]
+
+
+only_ind <- only_ind %>% group_by(ID) %>% mutate(no_years = n())
+
+most_year <- only_ind %>%
+  group_by(ID,Common_name,Country) %>%
+  summarize(no_years = n()) %>%
+  arrange(desc(no_years)) %>% 
+  head(40)
+
+most_year2 <- only_ind %>%
+  group_by(ID,Common_name,Country) %>%
+  mutate(no_years = n()) %>%
+  arrange(desc(no_years))
+
+
+# See how many of the top 40 tracked animals are located in each country
+common_country<-most_year %>% group_by(Country) %>% summarize(count = n()) %>% arrange(desc(count))
+
+#Selecting for the top countries, arranged by # years with counts past 2000
+exp_years<- most_year2 %>% filter(Year>1999)
+exp_years<- exp_years %>% filter(Country == "Canada"|Country == "United States")
+exp_years <- exp_years %>% group_by((ID)) %>% mutate(year_2000_up = n()) %>% arrange(desc(year_2000_up))
+
+#Drop reference/citation/no_years columns that are not needed
+exp_years<-subset(exp_years, select = -c(Reference,Citation,no_years))
+
+
+#Check the expenditure timeseries data for number of subspecies per species
+combos <- expenditures_timeseries %>% 
+   group_by(Species,Subspecies) %>%
+   filter(!is.na(Subspecies)) %>% 
+   summarize(count = n())
+
+num_of_sub <- combos %>% summarise(count = n()) %>% arrange(desc(count))
+
+
+NorthA_exp <- exp_years%>%left_join(.,expenditures_timeseries,by=c("Year","Genus", "Species", "Class"))
+NorthA_exp <- NorthA_exp %>% filter(Country == "United States")%>% filter(!is.na(Species_total))
+
+
+
+pop <- lm(Count~ Species_total, data = NorthA_exp)
+beta <- coef(pop)
+NorthA_exp %>%
+  ggplot(aes(Species_total,Count))+geom_point(alpha = .3)+geom_abline(intercept = beta[1],slope = beta[2], color = "red")+
+  labs(title = "Count vs Species Spending", y = 'Count', x = 'Species Spending')
+#The very general trend of there being a negative relationship between population count and federal spending makes sense, as you would expect that the species that have the lowest populations are endangered, would be those that have the most money spent on preservation. The graph also shows that there are a few species that have much more money spent on them relative to the majority of the species in the US. 
+
+#Getting rid of outliers 
+
+# 
+# exp_years %>% group_by(ID) %>% summarize(n = n()) %>% arrange(desc(n))
+```
+
+```{expenditure}
+#Getting a more general look at the expenditure data, seeing if any patterns are present
+expenditures_timeseries %>% group_by(Class) %>% summarize(count = n()/nrow(expenditures_timeseries)) %>% arrange(desc(count))
+
+#Much like our initial findings from the population dataset, the most common animal types are fish, birds, mammals and reptiles
+
+expenditures_timeseries %>% group_by(Class,Year) %>% mutate(Fed_Class_total = sum(Fed_total)) %>%  ggplot(aes(x = Year, y = Fed_Class_total,color = Class))+geom_line()
+
+#The spending does not seem to fluctuate much for any of the groups except for actinopteri, which is ray finned fish. Given we know that the most funded animal group is fish, it would be nice to know if that is the result of general spending on many types, or if this is focused on any particular species of fish
+
+x <- expenditures_timeseries %>% group_by(Species) %>% filter(Species_total>100000) %>% arrange(desc(Species_total)) %>% head(50)
+
+x %>% select(Class,Species,Species_total,Year)
+
+percent_spend_by_species <- x %>%
+   group_by(Year) %>%
+   mutate(total_spend_year= sum(Species_total)) %>%
+   group_by(Species) %>%
+   mutate(percent_spend_year = Species_total/total_spend_year)
+
+Grouped_species_percents <- percent_spend_by_species %>%
+   group_by(Year,Species) %>%
+   summarize(total_percent = sum(percent_spend_year))
+
+#Which species had the most spending per year in total
+expenditures_timeseries %>%group_by(Year) %>%  slice_max(Fed_total)
+
+#Percent of total spending in that year on the top species
+Grouped_species_percents %>% slice_max(total_percent)
+
+#Just a way to visualize that the majority of animals receiving governmental funding are receiving very little, and the bulk of spending goes towards a select few species
+expenditures_timeseries %>% ggplot(aes(x = Species_total, fill = Class)) + geom_histogram()+labs(x = 'Total Spending on Species', y = 'Count',title = 'Species Spending Levels')+xlim(0,9000000)+ylim(0,4000)
+
+# This clearly shows that there has been an emphasis from the FWS on trying to affect the populations of two particular species, the rainbow trout, and the chinook salmon. That being said, the fact that the stellar sea lion shows up at all seems significant, and is something that we could also look into to see if the spending has had a significant impact on population counts for any of these three animals. 
+```
+
+```{r table try}
+#need tabulizer, shiny, miniUI packages
+# p <- seq(from = 7, to = 61, by = 1)
+
+# area <- locate_areas("https://www.fws.gov/endangered/esa-library/pdf/2009_EXP_Report.pdf",pages = 7)
+# 
+# 
+# exp_2009 <- extract_tables("https://www.fws.gov/endangered/esa-library/pdf/2009_EXP_Report.pdf",
+#                       output = "data.frame",
+#                       pages = p)
+```
+
+```{r t}
+des_class <- c("Mammals","Birds","Reptiles","Amphibians","Fishes")
+expenditures_2014 %>% filter(Class %in% des_class)
+
+
+```

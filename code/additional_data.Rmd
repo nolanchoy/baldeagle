@@ -1,0 +1,236 @@
+---
+title: "Additional Data"
+output: html_notebook
+---
+
+```{r setup}
+
+# working directory (should be /final-project-bald_eagle)
+knitr::opts_knit$set(root.dir = normalizePath('../'))
+
+# packages
+library(tidyverse)
+library(janitor)
+
+```
+
+This reads a saved csv of expenditures_ts, written from the code in our_data at commit eaa3885.
+
+```{r expenditures_ts}
+
+# loading data
+raw_data <- read_csv('dataset/expenditures_ts.csv',
+                     col_types = 'ccccdddddd')
+
+```
+
+For my preference, some cleaning up of names and columns.  Adding a binomial (Genus species) column to help with searching later; removing features that aren't helpful.
+
+```{r cleaning}
+
+# add binomial; remove unnecessary features
+expen <- raw_data %>% 
+  clean_names() %>% 
+  mutate(binomial = paste(snakecase::to_any_case(genus, 'sentence'),
+                          species,
+                          sep = ' ')) %>% 
+  select(class, binomial, fws_total:year)
+
+# should be no NA
+any(is.na(expen))
+
+```
+
+Date notes:
+- There are some errors where species name doesn't make sense---mis-imported data?
+
+A list of species with most data and most expenditures (both average and overall).  `number` is number of data points, `average_exp` is average expenditure, and `overall_exp` is total expenditure for the species.
+
+```{r notable-species}
+
+notable <- expen %>% 
+  
+  # combine subspecies per year, keep both average and total exp.
+  group_by(class, binomial, year) %>% 
+  summarize(average_subsp = mean(species_total),
+            total_subsp = sum(species_total),
+            .groups = 'keep') %>% 
+  ungroup() %>% 
+  
+  # per-species insights
+  group_by(class, binomial) %>% 
+  summarize(number = n(),
+            average_exp = mean(average_subsp),
+            average_exp_tot = sum(average_subsp),
+            overall_exp_avg = mean(total_subsp),
+            overall_exp = sum(total_subsp),
+            .groups = 'keep') %>% 
+  mutate(class = ifelse(class == 'amphibias', 'amphibia', class))
+
+```
+
+Species with the most data:
+
+```{r most-data}
+
+# list
+(most_data <- notable %>% 
+  select(class:number) %>% 
+  arrange(desc(number)))
+
+# plot
+ggplot(notable, aes(class, number, color = scale(average_exp_tot))) +
+  geom_jitter(alpha = 0.7) +
+  scale_color_gradient(low = 'lightblue', high = 'black') +
+  labs(title = 'Classes with most data',
+       x = 'Class',
+       y = 'Number of years with data',
+       color = 'Normalized\nexpenditure')
+
+```
+
+Species with the most average expenditure:
+
+```{r most-avg}
+
+notable %>% 
+  select(class, binomial, average_exp) %>% 
+  arrange(desc(average_exp)) %>% 
+  head(10) %>% 
+  .$binomial -> top_avgavg
+
+notable %>% 
+  select(class, binomial, overall_exp_avg) %>% 
+  arrange(desc(overall_exp_avg)) %>% 
+  head(10) %>% 
+  .$binomial -> top_totavg
+
+```
+
+Species with the most total expenditure
+
+```{r most-total}
+
+notable %>% 
+  select(class, binomial, overall_exp) %>% 
+  arrange(desc(overall_exp)) %>% 
+  head(10) %>% 
+  .$binomial -> top_tottot
+
+notable %>% 
+  select(class, binomial, average_exp_tot) %>% 
+  arrange(desc(average_exp_tot)) %>% 
+  head(10) %>% 
+  .$binomial -> top_avgtot
+
+```
+
+List of all species to pull additional data for.  Note that "Ca ca", "Snake stock", and "Snake found." are all non-species.
+
+```{r list-species}
+
+unique(c(top_avgavg, top_avgtot, top_totavg, top_tottot))
+
+```
+
+Common names of found species (and file names):
+pallid sturgeon (Scaphirhynchus albus)
+-pallid_sturgeon.csv
+bull trout (Salvelinus confluentus)
+-bull_trout.csv
+rainbow trout (Oncorhynchus mykiss)
+-rainbow_trout.csv
+
+(salmon are mostly together)
+Chinook salmon (Oncorhynchus tshawytsch)
+sockeye salmon (Oncorhynchus nerka)
+coho salmon (Oncorhynchus kisutch)
+chum salmon (Oncorhynchus keta)
+-salmon.pdf (different data than salmon.csv; needs scraping)
+-salmon.csv
+-chinook.pdf
+-survival_chinook_steelhead.csv
+
+
+Datasets not found/not looked for:
+Steller sea lion
+red-cockaded woodpecker
+willow flycatcher
+razorback sucker
+Indiana bat
+desert tortoise
+
+For some preliminary analysis, a look into the pallid sturgeon.  Note that the survey data was from various surveys, so it was averaged per year (to avoid overweighting a year with more surveys).
+
+```{r pallid-sturgeon}
+
+raw_sturgeon <- read_csv('dataset/additional/pallid_sturgeon.csv',
+                         col_types = 'ciccdddd')
+
+# years surveyed per waterbody
+raw_sturgeon %>% 
+  clean_names() %>% 
+  select(year, waterbody, count) %>%
+  group_by(waterbody) %>% 
+  summarize(num_years = length(unique(year)),
+            .groups = 'keep')
+
+# mean counts after outliers removed
+sturgeon <- raw_sturgeon %>% 
+  clean_names() %>% 
+  filter(!waterbody %in% c('Fort Peck Dredge Cuts', 'Milk River')) %>% 
+  select(year, count) %>% 
+  group_by(year) %>% 
+  summarize(avg_count = mean(count),
+            .groups = 'keep') %>% 
+  arrange(year)
+
+# sturgeon expenditure
+sturgeon_exp <- expen %>% 
+  filter(binomial == 'Scaphirhynchus albus') %>%
+  inner_join(sturgeon, by = 'year')
+
+# plot expenditure vs sturgeon
+ggplot(sturgeon_exp, aes(year)) +
+  geom_smooth(aes(y = scale(avg_count)),
+              color = 'red',
+              se = F) +
+  geom_smooth(aes(y = scale(species_total)),
+              color = 'blue',
+              se = F) +
+  labs(title = 'Sturgeon expenditure and population',
+       x = 'Year',
+       y = 'Normalized expenditure/population counts')
+
+# linear model
+reg_sturgeon <- lm(avg_count ~ species_total,
+                   data = sturgeon_exp)
+summary(reg_sturgeon)
+plot(reg_sturgeon)
+
+# pretty badly not normal, maybe log or polynomial?
+reg_sturgeon2 <- lm(log(avg_count) ~ species_total,
+                   data = sturgeon_exp)
+summary(reg_sturgeon2)
+plot(reg_sturgeon2)
+
+```
+
+
+```{r test}
+
+ggplot(sturgeon_exp, aes(year)) +
+  geom_smooth(aes(y = avg_count,
+                  color = 'red'),
+              se = F) +
+  geom_smooth(aes(y = species_total/10000000,
+                  color = 'blue'),
+              se = F) +
+  scale_x_discrete(limits = seq(2002,2016,2)) +
+  scale_color_discrete(name = "Key",
+                       labels = c("Count", "Expenditure\n($10,000,000s)")) +
+  labs(title = 'Sturgeon expenditure and population counts',
+       x = 'Year',
+       y = 'Expenditure and average counts')
+
+```

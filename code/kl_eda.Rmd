@@ -1,0 +1,479 @@
+<<<<<<< HEAD
+---
+title: "Initial LP Data Analysis"
+output: html_notebook
+author: "Katie"
+---
+
+Notebook for initial look at the Living Planet data, saved as `LPR2020.csv` in `data`.  The working directory should be `final-project-bald_eagle/code`.
+
+```{r setup}
+# check working directory
+getwd()
+
+# packages
+suppressPackageStartupMessages(library(tidyverse))
+```
+
+Importing data from CSV.  ID is imported as integer; latitude, longitude, and all of the count data as double; everything else as character.  Note that some of the features should be factors, but that will be taken care of later, to keep control of factor levels.
+
+```{r import}
+
+LPI_data <- read_csv('../dataset/LPR2020.csv',
+                     col_types = 
+                       cols_only(ID = col_integer(),
+                                 Binomial = col_character(),
+                                 Class = col_character(),
+                                 Order = col_character(),
+                                 Family = col_character(),
+                                 Genus = col_character(),
+                                 Species = col_character(),
+                                 Subspecies = col_character(),
+                                 Common_name = col_character(),
+                                 Location = col_character(),
+                                 Country = col_character(),
+                                 All_countries = col_character(),
+                                 Region = col_character(),
+                                 Latitude = col_double(),
+                                 Longitude = col_double(),
+                                 Specific_location = col_character(),
+                                 temperate_or_tropical = col_character(),
+                                 System = col_character(),
+                                 T_realm = col_character(),
+                                 T_biome = col_character(),
+                                 FW_realm = col_character(),
+                                 FW_biome = col_character(),
+                                 M_realm = col_character(),
+                                 M_ocean = col_character(),
+                                 M_biome = col_character(),
+                                 Units = col_character(),
+                                 Method = col_character(),
+                                 `1950` = col_double(),
+                                 `1951` = col_double(),
+                                 `1952` = col_double(),
+                                 `1953` = col_double(),
+                                 `1954` = col_double(),
+                                 `1955` = col_double(),
+                                 `1956` = col_double(),
+                                 `1957` = col_double(),
+                                 `1958` = col_double(),
+                                 `1959` = col_double(),
+                                 `1960` = col_double(),
+                                 `1961` = col_double(),
+                                 `1962` = col_double(),
+                                 `1963` = col_double(),
+                                 `1964` = col_double(),
+                                 `1965` = col_double(),
+                                 `1966` = col_double(),
+                                 `1967` = col_double(),
+                                 `1968` = col_double(),
+                                 `1969` = col_double(),
+                                 `1970` = col_double(),
+                                 `1971` = col_double(),
+                                 `1972` = col_double(),
+                                 `1973` = col_double(),
+                                 `1974` = col_double(),
+                                 `1975` = col_double(),
+                                 `1976` = col_double(),
+                                 `1977` = col_double(),
+                                 `1978` = col_double(),
+                                 `1979` = col_double(),
+                                 `1980` = col_double(),
+                                 `1981` = col_double(),
+                                 `1982` = col_double(),
+                                 `1983` = col_double(),
+                                 `1984` = col_double(),
+                                 `1985` = col_double(),
+                                 `1986` = col_double(),
+                                 `1987` = col_double(),
+                                 `1988` = col_double(),
+                                 `1989` = col_double(),
+                                 `1990` = col_double(),
+                                 `1991` = col_double(),
+                                 `1992` = col_double(),
+                                 `1993` = col_double(),
+                                 `1994` = col_double(),
+                                 `1995` = col_double(),
+                                 `1996` = col_double(),
+                                 `1997` = col_double(),
+                                 `1998` = col_double(),
+                                 `1999` = col_double(),
+                                 `2000` = col_double(),
+                                 `2001` = col_double(),
+                                 `2002` = col_double(),
+                                 `2003` = col_double(),
+                                 `2004` = col_double(),
+                                 `2005` = col_double(),
+                                 `2006` = col_double(),
+                                 `2007` = col_double(),
+                                 `2008` = col_double(),
+                                 `2009` = col_double(),
+                                 `2010` = col_double(),
+                                 `2011` = col_double(),
+                                 `2012` = col_double(),
+                                 `2013` = col_double(),
+                                 `2014` = col_double(),
+                                 `2015` = col_double(),
+                                 `2016` = col_double(),
+                                 `2017` = col_double(),
+                                 `2018` = col_double()),
+                     na = 'NULL')
+```
+
+Looking for any rows with no count data.
+
+```{r findnull}
+LPI_data %>% 
+  select(`1950`:`2018`) %>% 
+  filter_all(all_vars(is.na(.)))
+
+LPI_data %>% 
+  select(`1950`:`2018`) %>% 
+  filter_all(all_vars(!is.na(.)))
+```
+
+Note that no rows have no count data, and no rows have count data for all years.
+
+Next, finding the proportions of existent count data for each row.
+
+```{r proportions}
+LPI_data %>%
+  pivot_longer(cols = `1950`:`2018`,
+               names_to = 'year',
+               values_to = 'count') %>%
+  group_by(ID) %>% 
+  summarize(proportion = mean(!is.na(count))) %>% 
+  ggplot(aes(x = proportion)) +
+    geom_histogram(breaks = seq(0,1,1/30),
+                   color = 'black',
+                   fill = 'steelblue') +
+    labs(title = 'amount of data per row',
+         x = 'proportion of non-na')
+```
+
+A very large majority of the rows have count data for less than 25% of the years.  It may be worth focusing in on only rows with greater than a certain amount of count data.
+
+Note that units are different for counts of each species.
+
+```{r units-number}
+
+LPI_data$Units %>% 
+  unique() %>% 
+  length()
+
+LPI_data$Units %>% 
+  str_to_lower() %>% 
+  unique() %>% 
+  length()
+
+```
+
+There are 1929 different units for counts; some of which are repeats.  Some of the units are different just on the basis of capitalization.
+
+To try to get some standardization, a new dataframe, `cleaned` is made.  Note that the features have also been converted to lowercase for ease of typing.
+
+```{r units-fix}
+
+# copy for cleaning
+cleaned <- LPI_data
+
+# lowercase features for convenience
+names(cleaned) <- tolower(names(cleaned))
+
+# lowercase for units
+cleaned$units <- str_to_lower(cleaned$units)
+
+# list of unique units and count
+unique_units <- cleaned %>%
+  group_by(units) %>%
+  count()
+
+# filter to look for counts of individuals
+unique_units %>%
+  filter(str_detect(units, "ind"))
+
+```
+
+Many of the units are just number of individuals said in different ways.  This needs to be cleaned up.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+=======
+---
+title: "Initial LP Data Analysis"
+output: html_notebook
+author: "Katie"
+---
+
+Notebook for initial look at the Living Planet data, saved as `LPR2020.csv` in `data`.  The working directory should be `final-project-bald_eagle/code`.
+
+```{r setup}
+# check working directory
+getwd()
+
+# packages
+suppressPackageStartupMessages(library(tidyverse))
+```
+
+Importing data from CSV.  ID is imported as integer; latitude, longitude, and all of the count data as double; everything else as character.  Note that some of the features should be factors, but that will be taken care of later, to keep control of factor levels.
+
+```{r import}
+
+LPI_data <- read_csv('../dataset/LPR2020.csv',
+                     col_types = 
+                       cols_only(ID = col_integer(),
+                                 Binomial = col_character(),
+                                 Class = col_character(),
+                                 Order = col_character(),
+                                 Family = col_character(),
+                                 Genus = col_character(),
+                                 Species = col_character(),
+                                 Subspecies = col_character(),
+                                 Common_name = col_character(),
+                                 Location = col_character(),
+                                 Country = col_character(),
+                                 All_countries = col_character(),
+                                 Region = col_character(),
+                                 Latitude = col_double(),
+                                 Longitude = col_double(),
+                                 Specific_location = col_character(),
+                                 temperate_or_tropical = col_character(),
+                                 System = col_character(),
+                                 T_realm = col_character(),
+                                 T_biome = col_character(),
+                                 FW_realm = col_character(),
+                                 FW_biome = col_character(),
+                                 M_realm = col_character(),
+                                 M_ocean = col_character(),
+                                 M_biome = col_character(),
+                                 Units = col_character(),
+                                 Method = col_character(),
+                                 `1950` = col_double(),
+                                 `1951` = col_double(),
+                                 `1952` = col_double(),
+                                 `1953` = col_double(),
+                                 `1954` = col_double(),
+                                 `1955` = col_double(),
+                                 `1956` = col_double(),
+                                 `1957` = col_double(),
+                                 `1958` = col_double(),
+                                 `1959` = col_double(),
+                                 `1960` = col_double(),
+                                 `1961` = col_double(),
+                                 `1962` = col_double(),
+                                 `1963` = col_double(),
+                                 `1964` = col_double(),
+                                 `1965` = col_double(),
+                                 `1966` = col_double(),
+                                 `1967` = col_double(),
+                                 `1968` = col_double(),
+                                 `1969` = col_double(),
+                                 `1970` = col_double(),
+                                 `1971` = col_double(),
+                                 `1972` = col_double(),
+                                 `1973` = col_double(),
+                                 `1974` = col_double(),
+                                 `1975` = col_double(),
+                                 `1976` = col_double(),
+                                 `1977` = col_double(),
+                                 `1978` = col_double(),
+                                 `1979` = col_double(),
+                                 `1980` = col_double(),
+                                 `1981` = col_double(),
+                                 `1982` = col_double(),
+                                 `1983` = col_double(),
+                                 `1984` = col_double(),
+                                 `1985` = col_double(),
+                                 `1986` = col_double(),
+                                 `1987` = col_double(),
+                                 `1988` = col_double(),
+                                 `1989` = col_double(),
+                                 `1990` = col_double(),
+                                 `1991` = col_double(),
+                                 `1992` = col_double(),
+                                 `1993` = col_double(),
+                                 `1994` = col_double(),
+                                 `1995` = col_double(),
+                                 `1996` = col_double(),
+                                 `1997` = col_double(),
+                                 `1998` = col_double(),
+                                 `1999` = col_double(),
+                                 `2000` = col_double(),
+                                 `2001` = col_double(),
+                                 `2002` = col_double(),
+                                 `2003` = col_double(),
+                                 `2004` = col_double(),
+                                 `2005` = col_double(),
+                                 `2006` = col_double(),
+                                 `2007` = col_double(),
+                                 `2008` = col_double(),
+                                 `2009` = col_double(),
+                                 `2010` = col_double(),
+                                 `2011` = col_double(),
+                                 `2012` = col_double(),
+                                 `2013` = col_double(),
+                                 `2014` = col_double(),
+                                 `2015` = col_double(),
+                                 `2016` = col_double(),
+                                 `2017` = col_double(),
+                                 `2018` = col_double()),
+                     na = 'NULL')
+```
+
+Looking for any rows with no count data.
+
+```{r findnull}
+LPI_data %>% 
+  select(`1950`:`2018`) %>% 
+  filter_all(all_vars(is.na(.)))
+
+LPI_data %>% 
+  select(`1950`:`2018`) %>% 
+  filter_all(all_vars(!is.na(.)))
+```
+
+Note that no rows have no count data, and no rows have count data for all years.
+
+Next, finding the proportions of existent count data for each row.
+
+```{r proportions}
+LPI_data %>%
+  pivot_longer(cols = `1950`:`2018`,
+               names_to = 'year',
+               values_to = 'count') %>%
+  group_by(ID) %>% 
+  summarize(proportion = mean(!is.na(count))) %>% 
+  ggplot(aes(x = proportion)) +
+    geom_histogram(breaks = seq(0,1,1/30),
+                   color = 'black',
+                   fill = 'steelblue') +
+    labs(title = 'Proportion of non-NA data per row',
+         x = 'Proportion',
+         y = 'Row count')
+```
+
+```{r proportions-filtered}
+
+LPI_data %>%
+  pivot_longer(cols = `1950`:`2018`,
+               names_to = 'year',
+               values_to = 'count') %>%
+  filter(!is.na(count)) %>%
+  ggplot(aes(as.numeric(year))) +
+    geom_density() +
+    labs(title = 'Density of non-NA data by year',
+         x = 'Year',
+         y = 'Density')
+
+
+```
+
+
+A very large majority of the rows have count data for less than 25% of the years.  It may be worth focusing in on only rows with greater than a certain amount of count data.
+
+Note that units are different for counts of each species.
+
+```{r units-number}
+
+LPI_data$Units %>% 
+  unique() %>% 
+  length()
+
+LPI_data$Units %>% 
+  str_to_lower() %>% 
+  unique() %>% 
+  length()
+
+```
+
+There are 1929 different units for counts; some of which are repeats.  Some of the units are different just on the basis of capitalization.
+
+To try to get some standardization, a new dataframe, `cleaned` is made.  Note that the features have also been converted to lowercase for ease of typing.
+
+```{r units-fix}
+
+# copy for cleaning
+cleaned <- LPI_data
+
+# lowercase features for convenience
+names(cleaned) <- tolower(names(cleaned))
+
+# lowercase for units
+cleaned$units <- str_to_lower(cleaned$units)
+
+# list of unique units and count
+unique_units <- cleaned %>%
+  group_by(units) %>%
+  count()
+
+# filter to look for counts of individuals
+unique_units %>%
+  filter(str_detect(units, "ind"))
+
+```
+
+Many of the units are just number of individuals said in different ways.  This needs to be cleaned up.  We can use the `forcats` package.
+
+Since that will be time-intensive to clean, a bit more analysis can be done on the rows with larger amounts of data to reduce the number of rows to work with.
+
+```{r normalize}
+
+cleaned <- cleaned %>% 
+  select(id, binomial, latitude:specific_location, `1950`:`2018`)
+  
+cleaned[, 6:74] <- t(scale(t(cleaned[, 6:74])))
+
+time_series <- cleaned %>% 
+  pivot_longer(cols = `1950`:`2018`,
+               names_to = 'year',
+               values_to = 'count')
+
+many <- cleaned %>% 
+  filter(!is.na(count)) %>% 
+  group_by(binomial) %>% 
+  count() %>%
+  ungroup() %>% 
+  filter(n > 10)
+
+time_series$year <- as.numeric(time_series$year)
+
+time_series <- time_series %>% 
+  filter(binomial %in% many$binomial)
+
+ggplot(time_series, aes(as.numeric(year), count)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = 'lm')
+
+reg_all <- lm(count ~ year, data = time_series)
+  
+  
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+>>>>>>> 2ed71247f43ec8a31d009b22a55f19f87e0a15a5

@@ -1,0 +1,68 @@
+---
+title: "fl_Modeling"
+author: "fahar laqa"
+date: "5/1/2021"
+output: github_document
+---
+
+```{r Expenditure Species}
+library(tidyverse)
+library(readr)
+library(forecast)
+library(scales)
+library(tseries)
+expenditures_FWS_ts %>% 
+  distinct(Genus,Species,Species_total,.keep_all = TRUE) %>%
+  transmute(Common_name, Year, FWS_total, Other_fed, Fed_total, States_total, Species_total) %>% 
+  filter(Common_name == c("Steller sea lion", "Loggerhead sea turtle / Loggerhead turtle", "Mountain lion / Puma / Cougar", "Pronghorn", "Sea Otter",  "Bull trout", "Loggerhead shrike")) %>% 
+  ggplot() + geom_line(aes(x=Year,y=Fed_total, color = Common_name))
+
+LPI_red_expen_ts %>% 
+  transmute(Common_name, Year, Country, Region, redlistCategory, Fed_total, Species_total )
+
+expenditures_FWS_ts %>% distinct(Genus,Species,Species_total,.keep_all = TRUE)
+
+```
+
+```{r sea lion forecasting}
+Sea_lion <- expenditures_FWS_ts %>% 
+  transmute(Common_name, Year, FWS_total, Other_fed, Fed_total, States_total, Species_total) %>% 
+  filter(Common_name == "Steller sea lion")
+Sea_lion
+
+Sea_lion <- ts(Sea_lion$Fed_total, frequency = 1)
+Sea_lion
+
+plot.ts(Sea_lion)
+
+fit = auto.arima(Sea_lion, max.p = 5, max.q = 5)
+fit
+
+fit2 =Arima(Sea_lion,order=c(1,1,1), lambda=0)
+arimafcast=forecast(fit2,h=5)
+arimafcast
+
+plot(arimafcast)
+```
+
+```{r forecast trout }
+Bull_trout <- expenditures_FWS_ts %>% 
+  transmute(Common_name, Year, FWS_total, Other_fed, Fed_total, States_total, Species_total) %>% 
+  filter(Common_name == "Bull trout")
+Bull_trout
+
+Bull_trout <- ts(Bull_trout$Fed_total, frequency = 1)
+Bull_trout
+
+
+plot.ts(Bull_trout)
+
+fit = auto.arima(Bull_trout, max.p = 5, max.q = 5)
+fit
+
+fit2 =Arima(Sea_lion,order=c(0,0,2), lambda=0)
+arimafcast=forecast(fit2,h=5)
+arimafcast
+
+plot(arimafcast)
+```

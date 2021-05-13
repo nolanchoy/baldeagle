@@ -1,0 +1,334 @@
+---
+title: "ch_model"
+output: html_document
+---
+
+```{r libraries}
+library(wordcloud)
+library(slam)
+library(tm)
+library(tidyverse)
+library(lubridate)
+library(knitr)
+library(ggpubr)
+
+
+```
+
+## Intro Part
+
+Our general objective in analyzing these datasets is to try and determine if there is a statistically significant relationship between the expenditures tracked by the Fish and Wildlife Service (FWS), and the population counts of species listed for protection by the Endangered Species Act. In order to try and determine if that relationship exists- and the extent to which it may be predictive of future species recovery- there are a number of variables that we will need to take into account. 
+* Population and expenditure values and their variation across time
+* Species listing dates/ listing status' (Endangered, threatened, recovering, etc.)
+* Taxonomic information for species of interest 
+Getting to the root of our main question also requires us to consider 123
+
+Given we are hoping to look at our main question in as braod a light as possible, we have opted to use data from the Living Species Index's population counts, as it contains information on over 2000 species ranging as far back as 1950. This choice does not come without drawbacks, as the dataset tends to be irregular when it comes to how well any particular species is tracked over time. For our purposes, this is not a deal breaker given we are generally interested in population counts for species ranging from 2000-2017 in the United States, as this is the period of time we have access to the FWS expenditure reports.
+
+```{r LPI eda}
+sum(is.na(LPI_data))/nrow(LPI_data)
+LPI_only_obs<-LPI_data%>%
+  pivot_longer(starts_with("X"),names_to="Year", values_to="Count")
+LPI_only_obs$Year<- substr(LPI_only_obs$Year,2,5)  
+g<-LPI_only_obs %>% filter(Year>1999 & Year <2018) %>% filter(Country == "United States")
+```
+
+The other really odd thing about the LPI dataset is that there are well over 1900 different methods being used as the units for the population counts. They range from the typical "individual counts" to things as convoluted as "mean number caught per ten minute tow." Granted, a number of the units being specified as distinct are really just slight spelling differences between similar units, so we decided to use a wordcloud to get a more general look at what was typically contained in the Units column. There is clearly an emphasis on the word "individual" and "per", so we increased the minimum frequency of the wordcloud to 50 to get a more specific look at the more common words. In general, population counts are determined by individuals per (unit), where unit is something like miles of coastline for otters, or per hectare for tortoises. 
+
+```{r LPI Units}
+## Unique Units
+unique(LPI_data$Units)
+
+## Units Wordcloud
+text <- Corpus(VectorSource(LPI_data$Units))
+h<-gsub('[[:punct:] ]+',' ',text)
+wordcloud(h,min.freq = 1)
+wordcloud(h,min.freq = 50)
+
+
+```
+
+We also wanted to get a general understanding of the spread of the data as far as classes of animals were concerned compared across our datasets. Fortunately, the most well represented classes in LPI data look similar to the most well represented animal classes in the FWS expenditure data. Both are top heavy with species of fish (a common thread that runs throughout our analysis), followed by birds and mammals. 
+
+```{r LPI graph class}
+LPI_data %>% filter(Country == "United States") %>%  ggplot(aes(x = Class, fill = Class))+geom_histogram(stat = "count")+labs(title = "LPI Animal Classes", x = "Class", y = "Number of Species") + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+scale_fill_discrete()
+
+only_animals <- c("actinopteri","amphibia","aves","clams","crustaceans","insects","reptilia","mammalia","snails")
+ex_distinct %>% filter(Class %in% only_animals)  %>% ggplot(aes(x = Class,fill = Class))+geom_histogram(stat = "count") + labs(title = "FWS Expenditures Animal Classes", y = "Number of Species") + 
+   theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+          axis.ticks.x=element_blank())+scale_fill_discrete()
+
+## little aside for the most tracked classes, interesting that france and china are tracking species extremely well, mention that the typical animals one might expect are most well tracked 
+
+most_year <- LPI_only_obs %>%
+  group_by(ID,Common_name,Country) %>%
+  summarize(no_years = n()) %>%
+  arrange(desc(no_years))
+
+most_years <- LPI_only_obs %>%
+  group_by(ID,Common_name,Country) %>%
+  mutate(no_years = n()) %>%
+  arrange(desc(no_years))
+
+# which country has the most counted population
+common_country<-most_year %>% group_by(Country) %>% summarize(count = n()) %>% arrange(desc(count))
+
+# Looks forward, but the fact that most of the species of interest are well tracked bodes well for this line of inquiry if it was redone in 10/20 years 
+checkin <- unique(m$Common_name)
+aa <- most_year %>% filter(Common_name %in% checkin) %>% filter(Country == "United States")
+```
+
+An important thing to keep in mind for the FWS expenditure data is that it is extremely top heavy both in which class receives the most funding, and which class is most represented by total species on the ESA list. Flowering plants make up nearly half of all species on the ESA list, with the next closest class being fish at 13.5 percent. When looking at expenditures, fish always receive more than 54 percent of any given years total, and typically that value is well into the 60 percent range. **Reasons** While fish are a clearly outliers relative to all species, when you account for the fact that the majority of all species receive less than 50,000, another trend develops, which is that the 4 classes fish, mammals, birds, and reptiles are the only species ever receiving over 10 million. Nicely lines up with the LPI data. **Reason for consistency of percent spend by species**
+
+```{r Most common, Most Funded}
+## Getting the distinct values for the FWS dataset
+ex_distinct <- expenditures_FWS_ts %>% distinct(across(-c(Recovery.Document.Title,Recovery.Document.Date)) ,.keep_all = TRUE) %>% distinct(across(c(FWS_total,States_total,Fed_total,Species_total,Other_fed)),.keep_all = TRUE) %>% select(-c(Common_name,Scientific.Name_url,ECOS.Species.Group,ESA.Listing.Status.y)) %>% filter(!is.na(Species_total))
+
+## Class Percentages
+ex_distinct %>% group_by(Class) %>% summarize(Percent = n()/nrow(ex_distinct)) %>% arrange(desc(Percent)) %>% knitr::kable()
+## Class Expenditure Percentages
+total_exp <- sum(ex_distinct$Species_total)
+ex_distinct %>% group_by(Class) %>% summarize(exp_percent = sum(Species_total)/total_exp) %>% arrange(desc(exp_percent)) %>% knitr::kable()
+
+#Just a way to visualize that the majority of animals receiving governmental funding are receiving very little, and the bulk of spending goes towards a select few species
+ex_distinct %>%
+   ggplot(aes(x = Species_total, fill = Class)) +
+   geom_histogram()+
+   labs(x = 'Total Spending on Species', y = 'Count',title = 'Species Spending Levels',subtitle = "0-10 Million Dollars")+
+   xlim(0,10000000)+
+   ylim(0,3000)
+
+ex_distinct %>%
+   ggplot(aes(x = Species_total, fill = Class)) +
+   geom_histogram()+labs(x = 'Total Spending on Species', y = 'Count',title = 'Species Spending Levels',subtitle = "10 Million + Dollars")+
+   xlim(10000000,150000000)+
+   ylim(0,50)
+
+## Typical percent spend by year/ very consistent 
+c = ex_distinct %>% 
+   group_by(Year) %>%
+   mutate(year_sum = sum(Species_total)) %>%
+   group_by(Class,Year) %>%
+   mutate(percent = sum(Species_total)/year_sum)
+
+c %>%
+   filter(Class %in% c("actinopteri","aves","mammalia","reptilia","flowering plants")) %>%
+   ggplot(aes(x = Class, y = percent))+geom_violin()+
+   labs(x = "Class", y = "Density of Proportion Spent by Year", title = "Density of Proportion of Total Species Spending by Class")+
+   scale_fill_viridis_b()
+
+```
+
+**Outlier that fish are, reasons, examples**
+
+```{r }
+ex_distinct <- ex_distinct %>% group_by(Year) %>% mutate(Year_total = sum(Species_total)) 
+Year_percent <- ex_distinct %>% group_by(Year,Class) %>% summarize(Year_percentages = sum(Species_total)/Year_total) %>% distinct()
+Year_percent %>% group_by(Year) %>% slice_max(Year_percentages) %>% arrange(desc(Year_percentages)) %>% knitr::kable()
+
+top_20_2017<-ex_distinct %>% filter(Year == 2017) %>% arrange(desc(Species_total)) %>% head(20)
+
+## Perspective info
+main_fish <- ex_distinct %>% filter(Species == "tshawytscha" |Species == "mykiss"|Species == "albus")
+non_fish <- ex_distinct %>% filter(Class != "actinopteri")
+(sum(non_fish$Species_total)-sum(main_fish$Species_total))/((sum(non_fish$Species_total)+sum(chinook_steelhead$Species_total))/2)*100
+
+
+
+ex_distinct %>% filter(Species_total<10000) %>% nrow()/nrow(ex_distinct)
+ex_distinct %>% filter(Species_total<50000) %>% nrow()/nrow(ex_distinct)
+
+fp <- ex_distinct %>% filter(Class == "flowering plants")
+sum(fp$Species_total)/sum(ex_distinct$Species_total)
+
+## Stratified expenditures
+yp <- Year_percent%>% slice_max(Year_percentages) %>% arrange(desc(Year_percentages,Year))
+
+```
+
+
+Initially, we were interested in seeing if expenditures could be used to make predictions on specific species populations counts, and given the LPI dataset only contains information about animals, we decided to focus on the top 5 animal classes by expenditure from the original FWS datasets. Given the FWS data is specific to the US, we also drop all of the information about species not located in the US. There are a number of columns that were duplicated from the initial merge with the expenditure information, so we had to be careful to only work with distinct rows from this dataset. 
+
+```{r da 1}
+## Earliest Year
+min(LPI_red_expen_ts$Year)
+
+## LPI data for the US, only including top animal classes that have expenditure data available
+top_5_class <- c("mammalia","aves","actinopteri","reptilia","amphibia")
+us_top_5_classes <- LPI_red_expen_ts %>%
+   filter(Class %in% top_5_class) %>%
+   distinct(across(c(ID,Year)),.keep_all = TRUE) %>% 
+   filter(Year>1999) %>% 
+   select(-c(genusName,kingdomName,phylumName,Citation,Reference,FW_realm,FW_biome,M_biome,M_realm,M_ocean,
+             orderName,className,familyName,infraType,infraName,infraAuthority,authority)) %>% 
+   filter(!is.na(Species_total)) %>%
+   distinct(ID,Year,Species_total,.keep_all = TRUE) %>% 
+   filter(Country == "United States")
+
+## See how many species are being tracked in the US
+length(unique(us_top_5_classes$Common_name)) 
+```
+
+We also wanted to get a general look at where these population counts were being collected, and the majority of them are near the coasts of the continental US, or in Alaska.
+
+```{r Mapping Where Species are Counted}
+## Map of where the collections took place
+US_species <- us_top_5_classes %>% 
+   st_as_sf(coords = c("Longitude", "Latitude")) %>%
+   st_set_crs(epsg_wgs84) %>% 
+   st_transform(epsg_us)
+epsg_us <- 2163
+epsg_wgs84 <- 4326
+us <- USAboundaries::us_states() %>%  st_transform(epsg_us)
+ggplot() +geom_sf(data = us)+geom_sf(data = US_species,mapping = aes(color =Class))
+
+amph<- LPI_red_expen_ts %>% filter(Class == "amphibia") %>% filter(Country == "United States")
+length(unique(amph$Common_name))
+```
+
+In order to try and get an idea of the impact that expenditures could be having on population counts, we first needed to normalize the counts. This is mostly due to the fact that there are so many different methods used for actually recording a population in the LPI dataset. As mentioned before, there are more than 1000 different ways that species have their populations counts recorded, and if we wanted to be able to make comparisons across species, we needed the values to be somewhat similar in structure. 
+
+The first thing we tried was to see if there was a clear linear relationship between total expenditures and population, not taking into account any other variables. Unsurprisingly, that model simply showed what you might expect on a really basic level, which is that expenditures were slightly higher for species that had lower population counts. Realistically though, you can clearly see that the only reason the graph looks the way it does in the first place is that there a few outlying data points whose expenditure values are significantly higher than the others. When you take those values out of the equation, the model returns essentially no relationship between expenditures and populations. This actually makes more sense, as you would expect that the relationship between expenditure and population would only be clear on a species level, given the massive difference in spending that we have seen is present throughout the FWS's dataset. 
+
+An important part of setting up the initial model between expenditures and species populations was to make sure we weren't simply looking at the population values on the given year funding was provided, as it was unrealistic to expect that money spent in the current year would instantly impact a given species well-being. For that reason, we modified the data to include lagged variables ranging from 1 to 7 years for each of the 18 species being examined.
+
+
+When looking at the linear models being regressed on the leading population variables, as mentioned in the big picture page, the relationship between a species reaching sexual maturity and a significant relationship between expenditures and population occuring is present for a number of the species looked at below. The [bald eagle](http://gaaged.org/docs/North%20Region%20Files/Game%20Bird%20Management%20Test%20Material.pdf) reaches nesting age at around 5, and the best model for that species occurs at 6 years after the initial expenditures. This is also true for the [broad-winged hawk](https://animaldiversity.org/accounts/Buteo_platypterus/) which typically only breeds after they have reached two years old, and whose best model occured when looking at the population impact after 3 years. The [pronghorn](https://ielc.libguides.com/sdzg/factsheets/pronghorn/reproduction#:~:text=Life%20Stages&text=Sexual%20maturity%20for%20males%20by,to%20conceive%20at%205%20months.) follows the same trend, typically mating once they are 1 or 2 years old, with the best model for them occurring when looking at the population 3 years in the future. While it is promising that the trends appear to have a justification behind them, the real issue is that we are reducing an already sparse data set to nearly unusable levels when looking into the leading variables. Without access to more population count numbers, it is not reasonable to assume that the significance of the relationships seen in the graphs is anything other than a general indicator of population well-being. For that reason, we ended up looking into whether expenditures and related variables could be used to predict whether a species population was stable, increasing, or decreasing. Doing so lets us look at the data 
+
+```{r linear models}
+## Arrange the species by number of years tracked since 2000
+most_year <- us_top_5_classes%>%
+  group_by(Common_name,ID) %>%
+  mutate(no_years_tracked = n()) %>%
+  arrange(desc(no_years_tracked))
+
+## Standardizing the counts/ taking only those tracked more than 8 years 
+m <- most_year %>% group_by(ID) %>% mutate_at(c("Count"), ~(scale(.) %>% as.vector)) %>% filter(no_years_tracked>8) ## standardized count
+ggplot(m,aes(x = Year, y = Count))+geom_line()+facet_wrap(~Common_name)
+
+## All species not predictive
+pop <- lm(Count~Species_total, data = m)
+summary(pop)$r.squared
+beta <- coef(pop)
+m %>% 
+   ggplot(aes(Species_total,Count))+geom_point(alpha = .4,mapping = aes( color = no_years_tracked))+geom_abline(intercept = beta[1], slope = beta[2], color = "red")+labs(title = "Predicted Population vs Actual Population - All Species", y = "Standardized Population Counts",x = "Total Species Expenditure", color = "Number of Years Tracked")
+
+m_no_outlier<- m %>% filter(Species_total<4*10^7)
+pop_no <- lm(Count~Species_total, data = m_no_outlier)
+summary(pop_no)$r.squared
+beta <- coef(pop_no)
+m_no_outlier %>% 
+   ggplot(aes(Species_total,Count))+geom_point(alpha = .4,mapping = aes( color = no_years_tracked))+geom_abline(intercept = beta[1], slope = beta[2], color = "red")+labs(title = "Predicted Population vs Actual Population - All Species", y = "Standardized Population Counts",x = "Total Species Expenditure", color = "Number of Years Tracked")
+
+## Looking only at the ones tracked above 8 years, regressing on leading population variables
+m_lead <- 
+    m %>%
+    group_by(ID) %>%
+    mutate(lead_count = dplyr::lead(Count, n = 1, default = NA)) %>% 
+    mutate(lead_count2 = dplyr::lead(Count, n = 2, default = NA)) %>% 
+    mutate(lead_count3 = dplyr::lead(Count, n = 3, default = NA)) %>% 
+    mutate(lead_count4 = dplyr::lead(Count, n = 4, default = NA)) %>% 
+    mutate(lead_count5 = dplyr::lead(Count, n = 5, default = NA)) %>% 
+    mutate(lead_count6 = dplyr::lead(Count, n = 6, default = NA)) %>% 
+    mutate(lead_count7 = dplyr::lead(Count, n = 7, default = NA))
+
+## Linear Models for each species
+lagged_models <- m_lead %>% group_by(Common_name) %>%
+  do(lag_fit = tidy(lm(lead_count5 ~ Species_total, data = .))) %>% 
+  unnest(lag_fit)
+
+p_under_10<- lagged_models %>%
+   filter(p.value<.1) %>%
+   filter(term == "Species_total") %>%
+   arrange(p.value)
+
+
+## Lagged variables for various species 
+be <- m_lead %>%
+   filter(Common_name == "Bald eagle")
+bem <- lm(lead_count6~Species_total,data = be)
+betabe <- coef(bem)
+summary(bem)
+be_graph <- be %>% 
+   ggplot(aes(Species_total,lead_count6))+
+   geom_point(alpha = .8)+
+   geom_abline(intercept = betabe[1], slope = betabe[2], color = "red")+
+   labs(title = "Bald Eagle - 6 Year Lag", y = "Standardized Population Counts",x = "Species Total")
+
+cs <- m_lead %>% 
+   filter(Common_name == "Chinook salmon")
+csm <- lm(lead_count6~Species_total,data = cs)
+betacs <- coef(csm)
+summary(csm)
+cs_graph <- cs%>% 
+   ggplot(aes(Species_total,lead_count6))+
+   geom_point(alpha = .8)+geom_abline(intercept = betacs[1], slope = betacs[2], color = "red")+
+   labs(title = "Chinook Salmon - 6 Year Lag", y = "Standardized Population Counts",x = "Species Total")
+
+bw <- m_lead %>% filter(Common_name == "Broad-winged hawk")
+bwm <- lm(lead_count3~Species_total,data = bw)
+betabw <- coef(bwm)
+summary(bwm)
+bw_graph <- bw %>% 
+   ggplot(aes(Species_total,lead_count3))+
+   geom_point(alpha = .8)+geom_abline(intercept = betabw[1], slope = betabw[2], color = "red")+
+   labs(title = "Broad Winged Hawk - 3 Year Lag", y = "Standardized Population Counts",x = "Species Total")
+
+ws <- m_lead %>% filter(Common_name == "Wood stork")
+wsm <- lm(lead_count4~Species_total,data = ws)
+betaws <- coef(wsm)
+summary(wsm)
+ws_graph<- ws %>% 
+   ggplot(aes(Species_total,lead_count4))+
+   geom_point(alpha = .8)+geom_abline(intercept = betaws[1], slope = betaws[2], color = "red")+
+   labs(title = "Wood Stork - 4 Year Lag", y = "Standardized Population Counts",x = "Species Total")
+
+mr <- m_lead %>% filter(Common_name == "Mangrove rail")
+mrm <- lm(lead_count~Species_total,data = mr)
+betamr <- coef(mrm)
+summary(mrm)
+mr_graph <- mr %>% 
+   ggplot(aes(Species_total,lead_count))+geom_point(alpha = .8)+
+   geom_abline(intercept = betamr[1], slope = betamr[2], color = "red")+
+   labs(title = "Mangrove Rail - 1 Year Lag", y = "Standardized Population Counts",x = "Species Total")
+
+ph <- m_lead %>% filter(Common_name == "Pronghorn")
+phm <- lm(lead_count5~Species_total,data = ph)
+betaph <- coef(phm)
+summary(phm)
+ph_graph <- ph %>% 
+   ggplot(aes(Species_total,lead_count5))+
+   geom_point(alpha = .8)+geom_abline(intercept = betaph[1], slope = betaph[2], color = "red")+
+   labs(title = "Proghorn - 5 Year Lag", y = "Standardized Population Counts",x = "Species Total")
+
+arranged_plots <- ggarrange(be_graph, cs_graph, bw_graph, mr_graph, ws_graph, ph_graph + rremove("x.text"), 
+          labels = c("A", "B", "C", "D","E","F"),
+          ncol = 2, nrow = 3)
+arranged_plots %>% annotate_figure(top = "Predicted Populations vs Actual Populations",fig.lab.size = 80)
+
+```
+
+
+Why picking over median. Overfitting, don't know if valuable based on that 
+
+```{r exp model }
+
+## Pulling out listing year/recovery doc date year/ finding years since original listing
+ex_distinct<- ex_distinct %>% mutate(Listed_year = mdy(ESA.Listing.Date) %>% year(), Doc_date = ymd(Recovery.Document.Date) %>% year(),years_since_listing = abs(Listed_year - Year)) 
+
+## Getting Yearly sums for the species
+distinct_yearly_sum<- ex_distinct %>% group_by(Year,Class,Genus,Species,Subspecies) %>% mutate(yearly_sum_species = sum(Species_total)) %>% distinct(across(c(yearly_sum_species,Common.Name)),.keep_all = TRUE)
+
+
+##
+distinct_yearly_sum_above_med <- distinct_yearly_sum %>% filter(yearly_sum_species>54372) %>% filter(Class == "actinopteri") %>% filter(!is.na(Species))
+t<- lm(yearly_sum_species~Species+Year+years_since_listing+ESA.Listing.Status.x+Conservation.Plan.Type,data = distinct_yearly_sum_above_med)
+summary(t)
+
+
+
+
+```
