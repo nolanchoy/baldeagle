@@ -1,0 +1,355 @@
+---
+title: Data
+description:
+toc: true
+featuredVideo:
+featuredImage: images/main_pages/data_cloud.jpg
+draft: false
+---
+
+<script src="/rmarkdown-libs/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<div id="overview" class="section level2">
+<h2>Overview</h2>
+<p>Because no data source on its own could really tell a coherent story about the trends in spending and population for species in North America, we use multiple main data sources are used throughout this project. The four main pieces of data used are:<br><br></p>
+<ul>
+<li>Living Planet Index (LPI) source data
+<ul>
+<li>File Name: <code>LPR2020data_public.csv</code></li>
+<li>Source: <a href="http://stats.livingplanetindex.org/">http://stats.livingplanetindex.org/</a></li>
+<li>Alias(es) in Code: <code>lpi</code><br><br></li>
+</ul></li>
+<li>IUCN Red List
+<ul>
+<li>File Name: <code>redlistspecies.csv</code></li>
+<li>Source: <a href="https://www.iucnredlist.org/statistics">https://www.iucnredlist.org/statistics</a></li>
+<li>Alias(es) in Code: <code>redlist</code>, <code>red</code><br><br></li>
+</ul></li>
+<li>US Fish and Wildlife Service (FWS) expenditure reports
+<ul>
+<li>Directory Name: <code>expen</code></li>
+<li>Source: <a href="https://www.fws.gov/endangered/esa-library/">https://www.fws.gov/endangered/esa-library/</a></li>
+<li>Alias(es) in Code: <code>exp</code>, <code>exp_&lt;X&gt;</code> (where &lt;X&gt; is the expenditure year)<br><br></li>
+</ul></li>
+<li>US FWS recovery plan reports
+<ul>
+<li>File Names: <code>FWS_full.csv</code>, <code>FWS_recovery.csv</code></li>
+<li>Source: <a href="https://ecos.fws.gov/ecp/report/species">https://ecos.fws.gov/ecp/report/species</a></li>
+<li>Aliases in Code: <code>fws</code>, <code>fws_data</code>, <code>fws_recovery</code><br><br></li>
+</ul></li>
+</ul>
+<p>The full data loading and cleaning process can be found <a href="/load_and_clean_data.R">here</a>. Running the file requires each of the datasets mentioned above, all of which can be found <a href="https://drive.google.com/drive/folders/1o5BlVfD8VJT2DUQfLKJjHZeO-8vIXPcG?usp=sharing">here</a>. The linked <code>load_and_clean_data.R</code> file also writes csv files with the major cleaned data to a directory called <code>clean</code> within the <code>dataset</code> directory.<br><br></p>
+<p>Other than <code>tidyverse</code> and <code>readxl</code>, which are used to read, sort, and “tidy” the data, the package <code>janitor</code> is used to quickly and consistently clean variable names.<br><br></p>
+<p><strong>Quick Links:</strong><br>
+<a href="#living-planet-index">Living Planet Index</a>: <a href="#variables">Variables</a>, <a href="#cleaning">Cleaning</a></p>
+<p><a href="#iucn-red-list">IUCN Red List</a>: <a href="#variables-1">Variables</a>, <a href="#cleaning-1">Cleaning</a></p>
+<p><a href="#fws-expenditures">FWS Expenditures</a>: <a href="#variables-2">Variables</a>, <a href="#cleaning-2">Cleaning</a></p>
+<p><a href="#fws-recovery-plans">FWS Recovery Plans</a>: <a href="#variables-3">Variables</a>, <a href="#cleaning-3">Cleaning</a></p>
+<p><a href="#joining-data">Joining Data</a></p>
+</div>
+<div id="living-planet-index" class="section level2">
+<h2>Living Planet Index</h2>
+<p>The first dataset used was sourced from the <a href="http://stats.livingplanetindex.org/">Living Planet Index</a>, and lists population counts from 1950 to 2018 for a large range of species. According to the LPI website, the data is “currently collated from more than 3,000 individual data sources such as published scientific literature, online databases and grey literature,” for the purpose of calculating the “Living Planet Index”, a measure of the health of the biosphere as a whole. Since the site requires registration, the data can also be found <a href="https://drive.google.com/drive/folders/1fxfnjhI6KyCK25uLY8px48zu1GR2N2H_?usp=sharing">here</a>.</p>
+<div id="variables" class="section level3">
+<h3>Variables</h3>
+<p>A large number of features are provided as part of the LPI dataset. However, only a few proved useful. This is largely because of the large variety of units used for the counts and the disparity in data availability per location.<br><br></p>
+<p>Notable variables (in <code>lpi_data</code>):<br><br></p>
+<ul>
+<li><code>id</code>: unique identification for each species’ data, per location.</li>
+<li><code>binomial:common_name</code>: taxonomic information for each species; <code>binomial</code> is used as a unique identifier per species.</li>
+<li><code>location:m_biome</code>: location data; mostly unused.</li>
+<li><code>units</code> and <code>method</code>: the units of the counts given; some of the most frequent units can be seen in the word cloud featured on this page.</li>
+<li><code>x1950:x2018</code>: count data.</li>
+</ul>
+</div>
+<div id="cleaning" class="section level3">
+<h3>Cleaning</h3>
+<p>Once it was decided that the units could not effectively be reconciled, the cleaning for the LPI dataset was fairly simple. As below, the data is fairly simply imported, notably ensuring that <code>id</code> is treated as a factor, and two features which are certainly not useful are removed. Then, the data is pivoted into a time series, which makes it much easier to use <code>year</code> as a predictor. Additionally, <code>NA</code> values are removed.<br><br></p>
+<pre class="r"><code># import
+lpi_data &lt;- read_csv(here::here(&#39;dataset&#39;, &#39;LPR2020data_public.csv&#39;),
+                     na = &#39;NULL&#39;,
+                     col_types = paste(&#39;fccccccccccccccddcccccccccccc&#39;,
+                                       paste(rep(&#39;d&#39;, 69), collapse = &#39;&#39;),
+                                       sep = &#39;&#39;)) %&gt;% 
+   clean_names() %&gt;% 
+   select(-c(&#39;reference&#39;, &#39;citation&#39;)) 
+
+# convert to time series
+lpi_ts &lt;- lpi_data %&gt;% 
+  pivot_longer(cols = x1950:x2018,
+               names_to = &#39;year&#39;,
+               values_to = &#39;count&#39;) %&gt;% 
+   mutate(year = as.integer(gsub(&#39;x&#39;, &#39;&#39;, year))) %&gt;% 
+   filter(!is.na(count))</code></pre>
+</div>
+</div>
+<div id="iucn-red-list" class="section level2">
+<h2>IUCN Red List</h2>
+<p>The second dataset is sourced from the IUCN (International Union for Conservation of Nature). It can be found <a href="https://www.iucnredlist.org/statistics">here</a>. The data contains information on numbers of species per endangerment status in different taxonomic classes, in different locations, and over time—this data is used to compare global endangerment statuses of different species. Species extinction risk assessment is conducted by members of the IUCN Species Survival Commission (SSC), appointed Red List Authorities (RLAs), Red List Partners, or specialists working on IUCN-led assessment projects according to IUCN Red List Categories and Criteria.</p>
+<div id="variables-1" class="section level3">
+<h3>Variables</h3>
+<p>Like the LPI dataset, the redlist dataset contains a significant amount of data on the taxonomy of each species. The redlist data additionally provides redlist category (which essentially amounts to endangerment status) and population trends.<br><br></p>
+<p>Notable variables (in <code>redlist_data</code>):<br><br></p>
+<ul>
+<li><code>scientific_name:species_name</code>: taxonomic information for each species.</li>
+<li><code>redlist_category</code>: self-explanatory. Endangerment status.</li>
+<li><code>population_trend</code>: exactly what it sounds like—population trends.</li>
+</ul>
+</div>
+<div id="cleaning-1" class="section level3">
+<h3>Cleaning</h3>
+<p>Also like the LPI data, the redlist data can be imported with little specific cleaning. Certainly unuseful features are removed, and the scientific names are converted into “binomial” form (<code>Genus_species</code>), to match the other datasets.<br><br></p>
+<pre class="r"><code>redlist_data &lt;- read_csv(here::here(&#39;dataset&#39;, &#39;redlistspecies.csv&#39;),
+                         col_types = &#39;ffccccccccccccfccff&#39;) %&gt;% 
+   clean_names() %&gt;% 
+   select(-c(&#39;internal_taxon_id&#39;,
+             &#39;infra_type&#39;,
+             &#39;infra_name&#39;,
+             &#39;infra_authority&#39;,
+             &#39;redlist_criteria&#39;)) %&gt;% 
+   mutate(binomial = gsub(&#39; &#39;, &#39;_&#39;, scientific_name))</code></pre>
+</div>
+</div>
+<div id="fws-expenditures" class="section level2">
+<h2>FWS Expenditures</h2>
+<p>The third major dataset used is an amalgamation of many datasets provided per year by the United States Fish and Wildlife Service (FWS). These datasets can be found <a href="https://www.fws.gov/endangered/esa-library/">here</a>. FWS Expenditures are noted by species and sometimes subspecies in various locations, and are available from 2000-2017. The keeping of these records is mandated by the Endangered Species Act (ESA) of 1973, which requires “an accounting on a species by species basis of all reasonably identifiable Federal expenditures” for the purpose of cost analysis.</p>
+<div id="variables-2" class="section level3">
+<h3>Variables</h3>
+<p>Each year of expenditures comes in its own Excel file, each of which has a slightly different structure and format (consistency is apparently not a trait of government datasets). In general, each of these yearly datasets has the following notable features, though some are missing or formatted differently.<br><br></p>
+<p>Notable variables (in <code>raw_exp_&lt;X&gt;</code>):<br><br></p>
+<ul>
+<li><code>Class</code>: class of each species.</li>
+<li><code>Species (50 CFR Part 17)</code>: species name and taxonomic information; sometimes also location.</li>
+<li><code>Status</code>: endangerment status as defined by the FWS.</li>
+<li><code>FWS Total ($):Species Total ($)</code>: spending per year per species, from different sources and/or in different categories.</li>
+</ul>
+</div>
+<div id="cleaning-2" class="section level3">
+<h3>Cleaning</h3>
+<p>Evidenced by the multitude of diverse Excel files, cleaning is a major endeavor for the expenditure files. Each year, the FWS formats its expenditure reports differently, with different methods of recording species names, locations— sometimes with species name and location housed in the same variable—and various document layouts. Therefore unique code is required to read and clean each year. The PDF files are first converted to Excel files, which are then imported into dataframes named <code>raw_exp_&lt;X&gt;</code>, where <code>&lt;X&gt;</code> is the data year. As shown below, sheet must also be specified, and differs year to year.<br><br></p>
+<pre class="r"><code># 2000
+raw_exp_2000 &lt;- read_excel(here::here(&#39;dataset&#39;,
+                                      &#39;expen/expenditure_2000.xlsx&#39;),
+                           # specify sheet number
+                           sheet = 3)</code></pre>
+<p><br>Because many of the files have a significant amount of data in a single column, a few functions were created to sort out bracketing and extract the relevant data. The <code>open_br</code> function extracts characters from within a final pair of parentheses in a string, the <code>rm_br</code> function deletes characters within a final pair of parentheses in a string, and <code>read_br</code> combines these two functions to recursively remove content in parentheses until the scientific name can be revealed. Though there are odd formatting challenges in the data which these functions, on occasion, miss, the majority of the data points’ scientific names are properly recovered using these functions.<br><br></p>
+<pre class="r"><code># function to read outermost bracket
+# example: &#39;welcome (home) (my(lovely) gator)&#39; %&gt;% last_br()
+# returns: &#39;my(lovely) gator&#39;
+last_br &lt;- function(string) {
+  
+  # initializing counters
+  open_br &lt;- 0
+  start_pos &lt;- 0
+  end_pos &lt;- 0
+  
+  # list of string characters
+  string_list &lt;- unlist(strsplit(string, split = &quot;&quot;))
+  
+  # finds final outermost opening and closing brackets
+  for (i in 1:nchar(string)) {
+    if (string_list[i] == &#39;(&#39;) {
+      if (open_br == 0) {
+        start_pos = i
+      }
+      open_br &lt;- open_br + 1
+    } else if (string_list[i] == &#39;)&#39;) {
+      if (open_br == 1) {
+        end_pos = i
+      }
+      open_br &lt;- open_br - 1
+    }
+  }
+  
+  # finding and returning string in last bracket
+  string &lt;- substr(string, start_pos + 1, end_pos - 1)
+  return(string)
+}
+
+# function to remove final brackets and content within
+# example: &#39;my(lovely) gator&#39; %&gt;% rm_br()
+# returns &#39;my gator&#39;
+rm_br &lt;- function (string) {
+  # ignore empty strings
+  if (nchar(string) == 0) {return(string)}
+  
+  # initializing counters
+  open_br &lt;- 0
+  start_pos &lt;- 0
+  end_pos &lt;- 0
+  
+  # list of string characters
+  string_list &lt;- unlist(strsplit(string, split = &quot;&quot;))
+  
+  # finds start and end brackets
+  for (i in 1:nchar(string)) {
+    if (string_list[i] == &#39;(&#39;) {
+      if (open_br == 0) {
+        start_pos = i
+      }
+      open_br &lt;- open_br + 1
+    } else if (string_list[i] == &#39;)&#39;) {
+      if (open_br == 1) {
+        end_pos = i
+      }
+      open_br &lt;- open_br - 1
+    }
+  }
+  
+  # finding and returning string except last bracket
+  string &lt;- paste(substr(string, 1, start_pos - 1),
+                  substr(string, end_pos + 1, nchar(string)),
+                  sep = &#39;&#39;)
+  return(string)
+}
+
+# combining functions to read last bracket without inner
+# example: &#39;welcome (home) (my(lovely) gator)&#39; %&gt;% read_br()
+# returns: &#39;my gator&#39;
+# ignores if bracket begins with &#39;=&#39;, is too short, begins with lower
+# returns NA if blank
+read_br &lt;- function (string) {
+  
+  if (!all(grepl(&#39;\\(&#39;, string),
+           str_count(string, &#39;\\)&#39;) == str_count(string, &#39;\\(&#39;))) {
+     return(string)
+  }
+  
+  bracket &lt;- rm_br(last_br(string))
+  
+  # avoiding too-small or false brackets
+  if (any(nchar(bracket) &lt;= 2,
+          str_detect(substr(bracket, 1, 1), &#39;[[:lower:]]&#39;),
+          substr(bracket, 1, 1) == &#39;=&#39;)) {
+     bracket &lt;- read_br(gsub(&#39;  &#39;, &#39; &#39;, rm_br(string)))
+  }
+  
+  final &lt;- ifelse(bracket == &#39;&#39;,
+                  NA,
+                  bracket)
+  
+  return(final)
+}</code></pre>
+<p><br>An example of the cleaning process for a single year (2008):</p>
+<ol style="list-style-type: decimal">
+<li>Import the data from sheet 2 of the relevant Excel file.</li>
+<li>Remove columns beginning with <code>...</code></li>
+<li>Clean and rename variables.</li>
+<li>Filter out <code>NA</code> values for name and <code>class</code></li>
+<li>Generate a <code>binomial</code> (‘Genus_species’) representation of the species scientific name, using the above functions.</li>
+<li>Attach the feature <code>year</code> with value 2008 for all data points.<br><br></li>
+</ol>
+<pre class="r"><code># 2008
+raw_exp_2008 &lt;- read_excel(here::here(&#39;dataset&#39;,
+                                      &#39;expen/expenditure_2008.xlsx&#39;),
+                           sheet = 2) %&gt;% 
+  select(-starts_with(&#39;...&#39;))
+
+exp_2008 &lt;- raw_exp_2008 %&gt;% 
+  clean_names() %&gt;% 
+  rename(common = species_50_cfr_part_17,
+         class = group_name) %&gt;% 
+  filter(!is.na(common),
+         !is.na(class)) %&gt;% 
+  
+  # changing scientific to Genus_species, subspecies, genus format
+  rowwise() %&gt;% 
+  mutate(scientific = read_br(gsub(&#39;\r?\n|\r&#39;, &#39; &#39;, common))) %&gt;%
+  mutate(scientific = gsub(&#39;  &#39;, &#39; &#39;, scientific)) %&gt;% 
+  mutate(binomial = paste(unlist(strsplit(scientific,
+                                          split = &#39; &#39;))[1:2],
+                          collapse = &#39;_&#39;),
+         subspecies = ifelse(str_count(scientific, &#39; &#39;) == 2,
+                             unlist(strsplit(scientific,
+                                             split = &#39; &#39;))[3],
+                             NA),
+         genus = paste(unlist(strsplit(scientific,
+                                       split = &#39; &#39;))[1],
+                       collapse = &#39;_&#39;)) %&gt;% 
+  ungroup() %&gt;% 
+  mutate(year = 2008)</code></pre>
+<p><br>This process is notably complex, and accounts for a significant amount of the time spent on this project. Though it is not shown here in the interest of space, it should be noted the data from 2011 is particularly difficult to clean, and requires specific grouping and concatenation, beyond that used to clean the other datasets.</p>
+</div>
+</div>
+<div id="fws-recovery-plans" class="section level2">
+<h2>FWS Recovery Plans</h2>
+<p>The final major piece of data, the FWS species recovery plans, can be found <a href="https://ecos.fws.gov/ecp/report/species">here</a>. This data notably contains information about conservation plans for each species carried out by the FWS, including plan type, start time, and recovery stage. Archives are kept by the US government and FWS to keep track of recovery and spending plan types for each species under protection by the Endangered Species Act (ESA).</p>
+<div id="variables-3" class="section level3">
+<h3>Variables</h3>
+<p>Moving back to data with reasonable naming convention and generally simpler cleaning, the FWS recovery plan data has a few notable features, in addition to taxonomic and location data.<br><br></p>
+<p>Notable variables (in <code>fws_&lt;data&gt;</code>):<br><br></p>
+<ul>
+<li><code>common_name:scientific_name_url</code>: taxonomic information for each species.</li>
+<li><code>esa_listing_status</code>: species listing under the Endangered Species Act.</li>
+<li><code>esa_listing_date</code>: date of species inclusion under the ESA</li>
+<li><code>conservation_plan_type</code>: what it says on the tin.</li>
+<li><code>recovery_document_date</code>: date of creation of recovery plan</li>
+<li><code>recovery_document_stage</code>: stage of plan (e.g. draft, revision, final)</li>
+</ul>
+</div>
+<div id="cleaning-3" class="section level3">
+<h3>Cleaning</h3>
+<p>Luckily, this data is fairly simple to import and clean, and the functions used to clean the expenditure data can be repurposed. Species identification in the <code>binomial</code> form is acquired using a similar process to that used for the expenditure data; otherwise the data is fairly simply imported. Only the uniquely useful features are maintained from this dataset.<br><br></p>
+<pre class="r"><code># recovery plan data
+fws_recovery &lt;- read_csv(here::here(&#39;dataset&#39;, &#39;FWS_recovery.csv&#39;),
+                         col_types = &#39;cccccccccccc&#39;) %&gt;%
+  clean_names() %&gt;% 
+  rowwise() %&gt;%
+  mutate(scientific = read_br(species_scientific_name)) %&gt;% 
+  mutate(binomial = paste(unlist(strsplit(scientific,
+                                          split = &#39; &#39;))[1:2],
+                          collapse = &#39;_&#39;),
+         subspecies = ifelse(str_count(scientific, &#39; &#39;) == 2,
+                             unlist(strsplit(scientific,
+                                             split = &#39; &#39;))[3],
+                             NA)) %&gt;% 
+  ungroup() %&gt;% 
+  select(scientific:subspecies,
+         recovery_document_title,
+         recovery_document_date:region_name)</code></pre>
+</div>
+</div>
+<div id="joining-data" class="section level2">
+<h2>Joining Data</h2>
+<p>Though a few other small datasets (which can be found in the <code>additional</code> directory <a href="https://drive.google.com/drive/folders/1o5BlVfD8VJT2DUQfLKJjHZeO-8vIXPcG?usp=sharing">here</a>) are used for some minor parts of the analysis, these four datasets and the datasets created by joining them are the main focus of the project.<br><br></p>
+<p>The cleaning done on each dataset makes it much simpler to pull each dataset into a combined time series. Notably, the expenditure data must be concatenated into a single <code>exp_ts</code> time series.<br><br></p>
+<pre class="r"><code># all clean expenditures in a list
+exp_list &lt;- list(exp_2000,
+                 exp_2001,
+                 exp_2002,
+                 exp_2003,
+                 exp_2004,
+                 exp_2005,
+                 exp_2006,
+                 exp_2007,
+                 exp_2008,
+                 exp_2009,
+                 exp_2010,
+                 exp_2011,
+                 exp_2012,
+                 exp_2013,
+                 exp_2014,
+                 exp_2015,
+                 exp_2016,
+                 exp_2017) %&gt;%
+  lapply(exp_select)
+
+# vertical join to convert to time series
+exp_ts &lt;- map_df(exp_list, rbind)</code></pre>
+<p><br>Then, the rest of the data can be joined together into a much more useful dataset than any of the datasets alone. The <code>lpi_red_ts</code> data was joined early on, so it is already joined in this example, but the <code>full_ts</code> shown below incorporates each of the above mentioned datasets. A small amount of cleaning was necessary to account for varying class names within the datasets.<br><br></p>
+<pre class="r"><code># all datasets merged together
+full_ts &lt;- left_join(exp_ts,
+                     fws_data,
+                     by = &#39;binomial&#39;) %&gt;%
+  distinct(.keep_all = TRUE) %&gt;%
+  filter(!is.na(scientific_name)) %&gt;%
+  left_join(fws_recovery, by = &#39;binomial&#39;)
+
+# small fix to maintain consistency
+full_ts$class &lt;- gsub(&#39;Amphibias&#39;, &#39;amphibia&#39;, full_ts$class)</code></pre>
+<p><br>The joined time series data are saved as csv files in a <code>clean</code> directory within the <code>dataset</code> directory for quick access, but the <code>load_and_clean_data.R</code> file also runs fairly quickly, so it’s not unreasonable to run it and rely on the produced environmental variables to carry out the analyses shown on the other pages. Happy exploring!</p>
+</div>

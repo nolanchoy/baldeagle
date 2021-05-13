@@ -1,0 +1,25 @@
+---
+title: Combining Datasets
+author: Bald Eagle
+date: '2021-04-08'
+slug: []
+categories: []
+tags: [fifth_post]
+description: Work on combining datasets to explore connections with different data.
+toc: yes
+authors: [https://ma415final.netlify.app/about/]
+series: []
+lastmod: '2021-04-08T18:10:01-04:00'
+featuredVideo: ~
+featuredImage: /images/post5/post_5img.png
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>Our team has been in the process of bringing in multiple datasets over the past few weeks. The primary (combined) dataset includes a IUCN Redlist dataset that lists the endangerment status of species around the world. We had no trouble combining that dataset with the original Living Planet dataset. Some of our preliminary exploratory data analysis (along with GDP per capita data) showed a correlation between a country’s income level and the proportion of species in each population trend category, as can be seen in the feature image.</p>
+<p>The datasets we are continuing to gather are the Expenditure Reports from the Fish and Wildlife Services from 1996-2019. So far we’ve brought in the reports from the years 2000-2011. However, these have taken time as each report is downloaded as a pdf, converted into an excel file with each year’s report altering the way it records species’ scientific names and segments its tables. However we have successfully extracted the scientific identifiers for the years 2000-2011 to be able to join this data with our Living Planet dataset by Family, Genus, Species, and Year.</p>
+<p>One primary concern is the mismatch between locations where locations are recorded in such different styles and formats, not only between Living Planet data and expenditure reports but even between expenditure reports themselves, that the task of matching locations seems near insurmountable. This is still a crucial problem that requires remedy as the population effects of expenditure for Chinook salmon in Central California are different than effects of expenditure for the same species in Snake River Washington.</p>

@@ -1,0 +1,55 @@
+---
+title: Exploratory Data Analysis
+author: Bald Eagle
+date: '2021-03-19'
+slug: []
+categories: []
+tags: [second_post]
+description: Some initial analysis of the chosen dataset.
+toc: yes
+authors: [Team Bald Eagle]
+series: []
+lastmod: '2021-03-19T16:44:41-04:00'
+featuredVideo: ~
+featuredImage: /images/post2/Maps-2.png
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>From this initial analysis, there doesn’t seem to be an obvious general trend in sheer counts of each species. However we noticed that the classes: elasmobranch (sharks), mammalia (mammals), and reptilia (reptiles) had noticeably higher rates of vulnerability among their species.</p>
+<pre class="r"><code>LPI_only_obs %&gt;%
+  filter(Units==&#39;Number of individuals&#39;,
+         Class==&#39;Mammalia&#39;, Country==&#39;United States&#39;,
+         !ID==2218) %&gt;%
+  ggplot(aes(x=Year,
+             y=Count,
+             group=ID,
+             col=ID)) +
+  geom_line(aes(col=Common_name)) +
+  labs(title = &#39;U.S. Mammals&#39;,
+       y = &#39;Count (Number of Individuals)&#39;,
+       color = &#39;Species&#39;) +
+  theme(axis.text.x = element_text(angle = -45)) +
+  scale_x_discrete(breaks = seq(1950,2018,5))</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/sans_walrus-1.png" width="672" /></p>
+<p>Note that the above figure includes mammals in the United States counted by number of individuals, with walruses excluded as an extreme outlier.</p>
+<pre class="r"><code>merged_data %&gt;%
+  filter(!is.na(redlistCategory)) %&gt;%
+  group_by(redlistCategory,Class) %&gt;%
+  summarize(Category_count=n(),
+            .groups = &#39;keep&#39;) %&gt;%
+  ungroup() %&gt;%
+  group_by(Class) %&gt;%
+  mutate(pct_Cat=Category_count/sum(Category_count)) %&gt;%
+  ggplot(aes(Class,pct_Cat,fill=redlistCategory)) +
+  geom_col() +
+  labs(title=&quot;Class Conservation Category Distribution&quot;,
+       y=&quot;Perecentage of Species in Category&quot;) +
+  theme(axis.text.x = element_text(angle = -45))</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/conservation_plot-1.png" width="672" /></p>
+<p>As far as location (as shown in the feature image), there seem to be clusters of species particularly near the equator. Some maps, such as the one below, were generated to visualize these locational clusterings.</p>
+<p>Considering the large and varied dataset, this result was reasonably expected. For future analysis, some cleaning in regard to units of counts must be done.</p>

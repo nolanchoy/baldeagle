@@ -1,0 +1,39 @@
+---
+title: Initial Data Selection
+author: Bald Eagle
+date: '2021-03-10'
+slug: []
+categories: []
+tags: [first_post]
+description: An overview of potential datasets for the project.
+toc: yes
+authors: [Team Bald Eagle]
+series: []
+lastmod: '2021-03-10T17:12:30-05:00'
+featuredVideo: ~
+featuredImage: /images/post1/lpi.png
+---
+
+So far, we have two potential datasets of interest, described below.
+
+## IUCN Data
+
+Our first dataset of interest is on numbers of endangered species, sourced from the IUCN (International Union for Conservation of Nature).  It can be found [here](https://www.iucnredlist.org/statistics).  The data contains information on numbers of species per endangerment status in different taxonomic classes, in different locations, and over time.  Species extinction risk assessment is conducted by members of the IUCN Species Survival Commission (SSC), appointed Red List Authorities (RLAs), Red List Partners, or specialists working on IUCN-led assessment projects according to IUCN Red List Categories and Criteria.<br><br>
+  
+Some of the data can be downloaded as CSV files, which can be loaded into R using `read_csv`.  Other pieces of the dataset are in the form of pdf tables which we will have to parse into a CSV file or directly to an R dataframe.  One concern with this data is that it lacks some dimension, since it exists mainly as counts of species.  Another concern is that some of the data is in PDF form, and may require special tools to facilitate conversion to manipulable data. 
+
+## Living PLanet Data
+
+Our second dataset of interest, sourced from [here](http://stats.livingplanetindex.org/), lists a times series of counts for particular species, ranging from 1950 to 2018. The dataset categorizes these species into various categories (such as family, class, species, subspecies, etc.) specific to location (country, region, specific location) .  This data is “currently collated from more than 3,000 individual data sources such as published scientific literature, online databases and grey literature.”<br><br>
+
+Since the site requires registration, the data can also be found [here](https://drive.google.com/drive/folders/1fxfnjhI6KyCK25uLY8px48zu1GR2N2H_?usp=sharing).  A particular concern with this dataset is that the counts are all done in different units (with the units stored in one of the columns), so it may be difficult to clean and compare across species.
+
+## General
+
+The main questions we hope to address with either of these datasets are:<br><br>
+
+1. What are the trends in numbers of species, particularly endangered and vulnerable species, in different parts of the world?
+
+2. Does changing a species’ conservation status lead to changes in funding, research or public attention for that species?<br><br>
+
+In general, a challenge we may face in the future is the lack of availability of data to pair with this dataset in later stages of the project.  Note that answering main question two hinges on other datasets on conservation funding.

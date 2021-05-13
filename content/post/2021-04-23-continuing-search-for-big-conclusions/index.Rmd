@@ -1,0 +1,27 @@
+---
+title: Continuing Search for Big Conclusions
+author: Bald Eagle
+date: '2021-04-23'
+slug: []
+categories: []
+tags: [seventh_post]
+description: ~
+toc: yes
+authors: [Team Bald Eagle]
+series: []
+lastmod: '2021-04-23T19:40:42-04:00'
+featuredVideo: ~
+featuredImage: /images/post7/classes.png
+---
+
+This week we spent our time exploring the qualitative aspects of our data and our project to get a sense of what variables drive changes in expenditure/population. This exploration led us to examining articles regarding factors that influence population decline of high-expenditure species such as sea lions and salmon, to looking at older research articles analyzing the effectiveness of species allocation. These articles have given context to our datasets and helped us narrow our research focus to looking at how effective expenditure is in encouraging the recovery of an endangered species population.
+
+Some narrow research done for specific species includes examining fish was also carried out in response to the finding that fish (*Actinopteri*) species seemed to have the most filled out expenditure data as well as a large number of the highest funded species (see featured image).
+
+Further specific data was found to support population data from the Living Planet Index data for the top seven fish species in terms of expenditure.  However, upon examination of the relationship between population and expenditure for one endangered and highly funded species, the pallid sturgeon (see below), no significant relationship was found (including after transformation of the highly heteroscedastic data).
+
+![*Pallid sturgeon expenditures vs average counts across bodies of water.*](/images/post7/sturgeon.png)
+
+This exploration into narrower scopes of the relationship between population further supported our suspicion that the relationship between population and expenditure may be obscured by a large amount of noise and unknown other variables.  This may lead us to add further data or rethink the scope of the project.
+
+We also added a dataset from the Endangered Species Act which has more compatible and regional specific endangered categories to the FWS dataset than the global IUCN dataset as well as information pertaining to geographic location and conservation plan types.

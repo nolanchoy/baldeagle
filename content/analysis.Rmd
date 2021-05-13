@@ -1,0 +1,272 @@
+---
+title: Analysis
+description:
+toc: true
+featuredVideo:
+featuredImage: images/main_pages/analysis_salmon.jpeg
+draft: false
+---
+
+```{r setup, include = F}
+
+knitr::opts_chunk$set(eval = F, warning = F, message = F)
+
+```
+
+## Introduction
+
+Our general objective in analyzing these datasets is to try and determine if there is a statistically significant relationship between the expenditures tracked by the Fish and Wildlife Service (FWS) and the population counts of species listed for protection by the Endangered Species Act (ESA). This is our main question, which branches into questions that have us consider the causality between populations and expenditure, additional variables, and individual relationships between population and expenditures. In order to try and determine if that central relationship between expenditure and exists- and the extent to which it may be predictive of future species recovery- there are a number of variables that we will need to take into account including:<br><br>
+
+* Population Health
+* Expenditure Funding and their variation across time
+* ESA Listing Dates
+* ESA Listing Status (Endangered, Threatened, Recovering, etc.)
+* Taxonomic Information for species of interest
+
+```{r data, include = F, eval = T}
+library(tidyverse)
+
+# lpi data as time series
+lpi_ts <- read_csv(here::here('dataset', 'clean/lpi_ts.csv'),
+                   col_types = 'fccccccccccccddccccccccccccid')
+
+# lpi and redlist data as time series
+lpi_red_ts <- read_csv(here::here('dataset','clean/lpi_red_ts.csv'),
+                       col_types = paste('fccccccccccccddcccccccccccc',
+                                         'fcccccccccccccid',
+                                         sep = ''))
+
+# expenditure data as time series
+exp_ts <- read_csv(here::here('dataset','clean/exp_ts.csv'))
+
+# joined expenditure and fws data in time series form
+full_ts <- read_csv(here::here('dataset','clean/full_ts.csv'))
+
+```
+
+## Exploratory Data Analysis:  Expenditure
+
+```{r subsetting, include = F, eval = T}
+
+# subsetting for convenience
+lpi_ts <- lpi_ts %>% 
+  select(id, binomial, class, common_name, units, year, count)
+
+lpi_red_ts <- lpi_red_ts %>% 
+  select(id, binomial, class, common_name, units, redlist_category:count)
+
+full_ts <- full_ts %>% 
+  select(class:common_name, esa_listing_status.x:conservation_plan_type,
+         recovery_document_title:recovery_document_stage) %>% 
+  rename(esa_status = esa_listing_status.x, subspecies = subspecies.x)
+
+# classes
+classes <- c("Mammalia", "Aves", "Reptilia", "Amphibia", "Actinopteri", "Clams", "Snails", "Insects", "Arachnids", "Crustaceans", "Flowering Plants", "Conifers", "Ferns and Allies", "Lichens", "Corals")
+
+full_ts <- full_ts %>% filter(class %in% classes)
+        
+```
+
+<br>An important thing to keep in mind for the FWS expenditure data is that it is extremely top heavy both in which class receives the most funding, and which class is most represented by total species on the ESA list. Flowering plants make up more than half of all species on the ESA list, with the next closest class being fish (Actinopteri) at 9.28 percent. When looking at expenditures, fish always receive a significant portion of any given year's total---distinctly larger than any other class. While fish are clearly outliers relative to all species, when you account for the fact that the majority of all species receive less than 50,000, another trend develops, which is that the 4 classes fish, mammals, birds, and reptiles are the only species ever receiving over 10 million.<br><br>
+
+```{r common-funded-b, echo = F, eval = T}
+
+# finding distinct values in full_ts
+exp_distinct <- full_ts %>% 
+  distinct(across(c(binomial, subspecies, year)), .keep_all = T) %>% 
+  filter(!is.na(species_total))
+
+# percentages of data and expenditure by class
+exp_distinct %>%
+  group_by(class) %>%
+  summarize(percent_data = n()/nrow(exp_distinct),
+            percent_exp = sum(species_total)/sum(exp_distinct$species_total),
+            .groups = 'keep') %>%
+  mutate(across(c(percent_data, percent_exp), ~ round((.x * 100), 2))) %>% 
+  DT::datatable(rownames = FALSE,
+                colnames = c('Class',
+                             'Percent of Data',
+                             'Percent of Expenditure'),
+                options = list(
+                  pageLength = 20,
+                  dom = 't',
+                  initComplete = htmlwidgets::JS(
+    "function(settings, json) {",
+    "$(this.api().table().header()).css({'background-color': '#000', 'color': '#fff'});",
+    "}")
+))
+
+```
+ <br>
+```{r distribution1, fig.align = 'center', out.width = '100%', echo = F, eval = T}
+
+# plots of total species expenditure by class
+# under $10 million
+exp_distinct %>%
+   mutate(species_total = species_total/1000000) %>% 
+   ggplot(aes(species_total, fill = class)) +
+     geom_histogram(bins = 25) +
+     labs(x = 'Total Spending on Species (millions)',
+          y = 'Count',
+          title = 'Species Spending Levels',
+          subtitle = 'Under 10 million USD') +
+     xlim(0, 10) +
+     ylim(0, 2500)
+```
+ <br>
+```{r distribution2, fig.align = 'center', out.width = '100%', echo = F, eval = T}
+# over $10 million
+exp_distinct %>%
+   mutate(species_total = species_total/1000000) %>% 
+   ggplot(aes(species_total, fill = class)) +
+    geom_histogram(bins = 25) +
+    labs(x = 'Total Spending on Species (millions)',
+         y = 'Count',
+         title = 'Species Spending Levels',
+         subtitle = 'Over 10 million USD') +
+    xlim(10, 120) +
+     ylim(0, 100)
+
+```
+ <br>
+```{r violins, fig.align='center', out.width = '100%', echo = F, eval = T}
+
+# classes of interest: the top 5 in expenditure
+top_five <- c("Actinopteri","Aves","Mammalia",
+              "Reptilia","Flowering Plants")
+
+# plot of percentage of spending per year
+exp_distinct %>%
+   group_by(year) %>%
+   mutate(year_sum = sum(species_total)) %>%
+   group_by(class, year) %>%
+   mutate(percent = sum(species_total)/year_sum) %>%
+   filter(class %in% top_five) %>%
+   ggplot(aes(x = class, y = percent)) + 
+    geom_violin(aes(fill = class), show.legend = F) +
+    labs(x = 'Class',
+         y = 'Density of Proportion Spent by Year',
+         title = 'Density of Proportion of Total Species Spending by Class')
+```
+
+## Exploratory Data Analysis:  Living Planet Data
+
+Beginning to analyze our main question under a broad lens, we have opted to use data from the Living Species Index's population counts, as it contains information on over 2000 species ranging as far back as 1950. This choice does not come without drawbacks, as the dataset tends to be irregular when it comes to how well any particular species is tracked over time. For our purposes, this is not a deal breaker as we are generally interested in population counts for species ranging from 2000-2017 in the United States, as this is the period of time we have access to the FWS expenditure reports.<br><br>
+
+```{r LPIeda, echo = F, eval = T}
+
+lpi_ts %>% 
+  filter(!is.na(count)) %>% 
+  ggplot(aes(x = year)) +
+    geom_density(lwd = 1.5) +
+    labs(x = 'Year',
+         y = 'Amount of Data',
+         title = 'LPI Count Data Density per Year')
+
+```
+
+There are well over 1900 different methods to record units for the population counts in the LPI data. Due to such varying metrics, we standardize population counts by population. This ensures that the magnitude of a change in a Count is standardized across all species and that we can effectively make cross-species comparisons. It is worth mentioning that the accuracy of counts are not weighed in these standardized counts. That is to say that a population estimate will have the same weight as the number of hares shot during hunting when modeling populations.<br><br>
+
+We hoped to find trends in populations with populations increasing for certain classes and decreasing for others. However, even after standardizing counts, population trends were difficult to identify, even after subsetting by variables such as class and biome.<br><br>
+
+```{r LPI graph class, echo = F, eval = T}
+
+LPI_data <- read_csv(here::here('dataset', 'LPR2020data_public.csv'),
+                     na = 'NULL',
+                     col_types = paste('fccccccccccccccddcccccccccccc',
+                                       paste(rep('d', 69), collapse = ''),
+                                       sep = '')) %>%
+   select(-c('Reference', 'Citation')) 
+
+LPI_data %>% filter(Country == "United States") %>%  ggplot(aes(x = Class, fill = Class))+geom_histogram(stat = "count")+labs(title = "LPI Animal Classes", x = "Class", y = "Number of Species") + theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())+scale_fill_discrete()
+```
+
+## Examining Joined Data
+
+Initially, we were interested in seeing if expenditures could be used to make predictions on specific species populations counts, and given the LPI dataset only contains information about animals, we narrowed in on the top 5 animal classes by expenditure from the original FWS datasets. With the FWS data specific to the US, we also drop all of the information about species not located in the US. There are a number of columns that were duplicated from the initial merge with the expenditure information, so we had to be careful to only work with distinct rows from this dataset.<br><br>
+
+However, population trends still remained elusive. After joining LPI data with expenditure data, no easily visible trends emerged.<br><br>
+
+![](../images/main_pages/analysis/image1.png)<br><br>
+
+We expanded our exploration to data from the IUCN Red list dataset which included information on species’ population trends. We plotted standardized counts on year and subset by population trend to see that population trends generally matched trends in standardized counts.<br><br>
+
+
+## Initial Model
+
+To analyze the relationship between expenditures and species’ populations with a more statistical focus, we used population trend data from the IUCN, and expenditure trend data from the FWS to build a logistic regression. When building this model, we opted to hand select variables rather than perform variable selection. We did this in part because of our limited number of variables but more so because of our project’s focus on determining the significance of specific variables. Our logistic regression follows the equation:<br>
+$Inc\_stab = \beta_1 * log(Species\_sum_i) + \beta_2 * Class_i + \beta_3 * Years_i + \varepsilon_{it}$
+
+<br>Where:
+
+* $Inc\_stab$ is the log odds $log(\frac{p}{1-p})$ of an increasing or stable population trend
+* $Species\_sum$ is the cumulative expenditures on species $i$ between 2000 and 2017
+* $Class$ is the class of species $i$
+* $Years$ is the years since the ESA listing date of species $i$
+* $i$ is a species<br><br>
+
+![](../images/main_pages/analysis/image7.png)<br><br>
+
+![](../images/main_pages/analysis/image4.png)<br><br>
+
+Using the residual deviance to perform a goodness of fit test for the overall model, we found that the model was statistically significant with a p-value of 0.0002. We found that the log of cumulative expenditures has a statistically significant positive relationship with the log likelihood that a species’ population trend is either increasing or stable. Specifically, a 1 percent increase in cumulative expenditures is associated with an expected .092 increase in the log odds or an expected 9% increase in the odds of a population trend being increasing or stable. Additionally, we found that a 1 year increase in the years since a species’ ESA listing date is associated with a 0.028 increase in the log odds or a 2.8% increase in the odds of a population trend being increasing or stable.<br><br>
+
+We were curious as to whether cumulative expenditure was associated with time. We hypothesized that if species received more funding the longer they were listed by the ESA, there would be a significant interaction effect between the two variables, which could lead to our previous conclusions about the impact of overall funding on population trends being muddied. Using a Partial F Test between the nested non-interaction term model and the full model with an interaction term between log(Species_sum) and Years, we found that the interaction term was insignificant.<br><br>
+
+![](../images/main_pages/analysis/image2.png)<br><br>
+
+![](../images/main_pages/analysis/image9.png)<br><br>
+
+## Time Series Testing
+
+<TIME SERIES MODEL>
+
+The first model was significant in informing us that higher levels of expenditure do lead to higher chances of a population being stable or increasing. However, we wanted to test for the relationship over time using a non-static response variable and the information stored in the time series expenditure data. We constructed a linear model using the equation:<br>
+$std\_count_{it} = \beta_1 * log(Species\_total_{it}) + \beta_2 * Class_i + \beta_3 * log(Species\_total_{it}) * Class_i + \varepsilon_{it}$
+
+<br>Where:
+
+* $std\_count$ is the standardized count for species $i$ in year $t$
+* $Species\_total$ is the total expenditure on species $i$ in year $t$
+* $Class$ is the class for species $i$
+* $log(Species\_total_{it}) * Class_i$ is the interaction term
+* $i$ is a species
+* $t$ is year<br><br>
+
+After computing a partial f test like earlier to test the significance of the interaction term, we found that the coefficient for the interaction term β4 was statistically significant. Interestingly the β1 coefficient is statistically significant suggesting a negative relationship between Species_total and the stand-in for population, standardized count. According to the linear model, holding other variables constant, a 1% increase in total species expenditures is associated with an expected -0.029 change in the standardized count. We believe the change is due to the inverse relationship between expenditures and population in the moment. The inverse relationship could suggest that causation is flipped and that it may be federal and state agencies assigning expenditures reacting to population changes.<br><br>
+
+As a population decreases, expenditure might increase or if population increases, expenditure might decrease. Although the model is significant, measures such as the 0.005 adjusted R-squared show that the model explains little of the variation in the standardized count. However, the model does not contradict the previous logistic regression, while expenditures may react to population changes, in the long run, higher levels of expenditure are still associated with successful populations. While it may be expenditures reacting to population changes, we believed that perhaps the impact may still be deduced by modelling individual species with lagged variables to observe changes later in time. For that reason, we modified the data to include lagged variables ranging from 1 to 7 years for each of the species being examined.<br><br>
+
+## Individual Species Analysis
+
+When looking at the linear models being regressed on the lagged population variables, as mentioned in the big picture page, the relationship between a species reaching sexual maturity and a significant relationship between expenditures and population occurring is present for a number of the species looked at below.<br><br>
+
+![](../images/main_pages/analysis/image12.png)<br><br>
+
+### Bald Eagle
+
+![](../images/main_pages/analysis/image6.png)<br><br>
+
+### Chinook Salmon
+
+![](../images/main_pages/analysis/image3.png)<br><br>
+
+### Wood Stork
+
+![](../images/main_pages/analysis/image8.png)<br><br>
+
+### Mangrove Rail
+
+![](../images/main_pages/analysis/image11.png)<br><br>
+
+### Broad-Winged Hawk
+
+![](../images/main_pages/analysis/image10.png)<br><br>
+
+### Pronghorn
+
+![](../images/main_pages/analysis/image5.png)<br><br>
+
+The [bald eagle](http://gaaged.org/docs/North%20Region%20Files/Game%20Bird%20Management%20Test%20Material.pdf) reaches nesting age at around 5, and the best model for that species occurs at 6 years after the initial expenditures. This is also true for the [broad-winged hawk](https://animaldiversity.org/accounts/Buteo_platypterus/) which typically only breeds after they have reached two years old, and whose best model occurred when looking at the population impact after 3 years. The [pronghorn](https://ielc.libguides.com/sdzg/factsheets/pronghorn/reproduction#:~:text=Life%20Stages&text=Sexual%20maturity%20for%20males%20by,to%20conceive%20at%205%20months.) follows the same trend, typically mating once they are 1 or 2 years old, with the best model for them occurring when looking at the population 3 years in the future. While it is promising that the trends appear to have a justification behind them, the problem is that we are reducing an already sparse data set to nearly unusable levels when looking into the lagged variables. Without access to data over a longer time period, it is not reasonable to assume that the significance of the relationships seen in the graphs is anything other than a general indicator of population well-being.

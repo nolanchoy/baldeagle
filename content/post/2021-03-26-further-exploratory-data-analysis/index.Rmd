@@ -1,0 +1,37 @@
+---
+title: Further Exploratory Data Analysis
+author: Bald Eagle
+date: '2021-03-26'
+slug: []
+categories: []
+tags: [third_post]
+description: More in-depth analysis of the initial dataset, and some connection to other data.
+toc: yes
+authors: [Team Bald Eagle]
+series: []
+lastmod: '2021-03-26T17:02:46-04:00'
+featuredVideo: ~
+featuredImage: /images/post3/post2_feature.png
+---
+
+The large number of non-standard units---over 1900 different units used---and large gaps in the Living Planet data have made exploration difficult, and there seem to be few significant trends given the varied nature of the large number of species.  Subsetting by biome, class, region and country were uninformative with no visible significant trends.  Looking at proportions of data in each row (Figure 1), it is clear that there is a very limited pool of data provided by this dataset.
+
+![*Figure 1. Proportion of non-NA data per row.*](/images/post3/data_proportion.png)
+
+Additionally, most of the data is recorded around 2000 (Figure 2). Since it  was sourced from various publications, this makes sense—older data is simply not available and more recent data has not yet been published or scraped.  For these reasons, some time is needed to thoroughly clean the data, and other data sources may need to be explored.
+
+![*Figure 2. Density of non-NA data by year.*](/images/post3/year_density.png)
+
+This week we focused on exploring other data sources, specifically expenditure data that could help put population trends in perspective (or could reflect reaction to population trends). We gathered and cleaned data from the Fish and Wildlife Services expenditure reports for 2000-2008, and plan on loading the rest this week.
+
+![*Figure 3. Total Fish and Wildlife Service spending with class proportions.*](/images/post3/post2_feature.png)
+
+One observation we noticed was that *actinopteri* (Fish) made up a large amount of federal spending. The reason for the dip around 2006 as well as its effects are areas we would like to explore further.
+
+![*Figure 4. Salmon expenditure by year.*](/images/post3/salmon_expenditure.png)
+
+Looking closer, we could see that spending on salmon could total up to and sometimes more than $60 million in some years---this large amount may correspond to population trends in salmon species.
+
+Once we iron out a few of the remaining issues with joining the species to expenditure data sets, we hope to examine where expenditure changes reflect changes in population counts (or vice versa) and possibly the effectiveness of spending.
+
+Next steps will be to look more into other data (such as expenditures, as above) and to normalize the units of the counts to allow for more significant analysis.  With time, location, and expenditure data in addition to the counts, steps can be taken to begin fitting models to the data.

@@ -1,0 +1,32 @@
+---
+title: Initial Model Formulation
+author: Bald Eagle
+date: '2021-04-02'
+slug: []
+categories: []
+tags: [fourth_post]
+description: A start to modelling the data, and a continuation of exploration and cleaning.
+toc: yes
+authors: [https://ma415final.netlify.app/about/]
+series: []
+lastmod: '2021-04-02T17:31:23-04:00'
+featuredVideo: ~
+featuredImage: /images/post4/linear.png
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+<div id="TOC">
+
+</div>
+
+<p>We began the week by normalizing our Count variable across rows (for each individual ID) to attempt to overcome the issue with the inconsistent units. We also narrowed down our data set to species in the US with expenditure data with more than 4 years recorded. Our dataset shrunk to about 35 species.</p>
+<p>To begin exploring the relationship between expenditure and populations, a linear model was fit using the response variable expenditure and the total species count as a predictor. This model can be seen above, as the feature image.</p>
+<p>This showed a negative relationship between Species Spending and Count. Lower levels of Species counts are more associated with higher levels of Spending. However, there is still a lot of noise in the data.</p>
+<p>Another model we looked at examined the time series relationship between spending and standardized Species count. That model was fairly ineffective, possibly because there is some sort of lagging to account for (that is to say, increased expenditure might drive populations up after a few years or vice versa) or because the data is still too noisy. More analysis needs to be done to determine the appropriate parameter for this “lag” in effect.</p>
+<div class="figure">
+<img src="/images/post4/salmon.png" alt="" />
+<p class="caption"><em>Salmon expenditure by year with normalized population counts.</em></p>
+</div>
+<p>The correlation between Expenditure and Count seems to be very muddled. More exploration must be done regarding the types of models that could help us discern the pattern.</p>
+<p>It may also need to be accounted for that populations, in ecology theory, tend to be best modeled by logarithmic (or, at a closer level, sinusoidal) functions; however, this shouldn’t be overly impactful when using population levels to predict expenditure—populations that require such spending are unlikely to behave exactly as one might expect in nature.</p>

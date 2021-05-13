@@ -1,0 +1,98 @@
+---
+title: Exploratory Data Analysis
+author: Bald Eagle
+date: '2021-03-19'
+slug: []
+categories: []
+tags: [second_post]
+description: Some initial analysis of the chosen dataset.
+toc: yes
+authors: [Team Bald Eagle]
+series: []
+lastmod: '2021-03-19T16:44:41-04:00'
+featuredVideo: ~
+featuredImage: /images/post2/Maps-2.png
+---
+
+```{r walrus_setup, include=FALSE}
+
+library(tidyverse)
+LPI_data <- read.csv('../../../dataset/LPR2020data_public.csv')
+
+LPI_only_obs <- LPI_data%>%
+  pivot_longer(starts_with("X"),names_to="Year", values_to="Count")%>%
+  group_by(ID)%>%
+  filter(!Count=='NULL')%>%
+  mutate(Year=sub('.', '', Year))
+
+LPI_only_obs$ID <- as.factor(LPI_only_obs$ID)
+LPI_only_obs$Count <- as.numeric(LPI_only_obs$Count)
+
+```
+
+From this initial analysis, there doesn’t seem to be an obvious general trend in sheer counts of each species.  However we noticed that the classes: elasmobranch (sharks), mammalia (mammals), and reptilia (reptiles) had noticeably higher rates of vulnerability among their species.
+
+```{r sans_walrus}
+
+LPI_only_obs %>%
+  filter(Units=='Number of individuals',
+         Class=='Mammalia', Country=='United States',
+         !ID==2218) %>%
+  ggplot(aes(x=Year,
+             y=Count,
+             group=ID,
+             col=ID)) +
+  geom_line(aes(col=Common_name)) +
+  labs(title = 'U.S. Mammals',
+       y = 'Count (Number of Individuals)',
+       color = 'Species') +
+  theme(axis.text.x = element_text(angle = -45)) +
+  scale_x_discrete(breaks = seq(1950,2018,5))
+
+```
+
+Note that the above figure includes mammals in the United States counted by number of individuals, with walruses excluded as an extreme outlier.
+
+```{r conservation_setup, include=FALSE}
+
+redlist_data <- read.csv('../../../dataset/redlistspecies.csv')
+redlist_data$scientificName <- gsub(" ", "_", redlist_data$scientificName)
+
+merged_data <- left_join(LPI_data,
+                         redlist_data,
+                         by=c('Binomial'='scientificName'))
+
+merged_timeseries <- merged_data %>%
+  pivot_longer(starts_with("X"),names_to="Year", values_to="Count") %>%
+  group_by(ID) %>%
+  filter(!Count=='NULL') %>%
+  mutate(Year=sub('.', '', Year))
+
+merged_timeseries$ID <- as.factor(merged_timeseries$ID)
+merged_timeseries$Count <- as.numeric(merged_timeseries$Count)
+merged_timeseries$redlistCategory <- factor(merged_timeseries$redlistCategory, levels = c(NA, 'Data Deficient', 'Lower Risk/leask concern', 'Least Concern', 'Lower Risk/conservation dependent', 'Lower Risk/near threatened', 'Near Threatened', 'Vulnerable', 'Endangered', 'Critically Endangered', 'Extinct in the Wild', 'Extinct'))
+merged_data$redlistCategory <- factor(merged_data$redlistCategory, levels = c(NA, 'Data Deficient', 'Lower Risk/leask concern', 'Least Concern', 'Lower Risk/conservation dependent', 'Lower Risk/near threatened', 'Near Threatened', 'Vulnerable', 'Endangered', 'Critically Endangered', 'Extinct in the Wild', 'Extinct'))
+
+```
+
+```{r conservation_plot}
+
+merged_data %>%
+  filter(!is.na(redlistCategory)) %>%
+  group_by(redlistCategory,Class) %>%
+  summarize(Category_count=n(),
+            .groups = 'keep') %>%
+  ungroup() %>%
+  group_by(Class) %>%
+  mutate(pct_Cat=Category_count/sum(Category_count)) %>%
+  ggplot(aes(Class,pct_Cat,fill=redlistCategory)) +
+  geom_col() +
+  labs(title="Class Conservation Category Distribution",
+       y="Perecentage of Species in Category") +
+  theme(axis.text.x = element_text(angle = -45))
+
+```
+
+As far as location (as shown in the feature image), there seem to be clusters of species particularly near the equator.  Some maps, such as the one below, were generated to visualize these locational clusterings.
+
+Considering the large and varied dataset, this result was reasonably expected.  For future analysis, some cleaning in regard to units of counts must be done.
